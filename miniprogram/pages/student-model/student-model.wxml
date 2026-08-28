@@ -1,32 +1,89 @@
 <view class="page">
-  <view wx:if="{{loading}}" class="state-card">正在读取首次建模结果...</view>
-  <view wx:elif="{{!hasModel}}" class="state-card">{{errorMessage}}</view>
+  <view wx:if="{{loading}}" class="state-card">
+    <view class="state-title">正在读取学生模型</view>
+    <view class="state-desc">请稍候</view>
+  </view>
+
+  <view wx:elif="{{!hasModel}}" class="state-card">
+    <view class="state-title">暂无可查看的学生模型</view>
+    <view class="state-desc">{{errorMessage}}</view>
+    <view class="refresh-button" bindtap="refreshModel">重新读取</view>
+  </view>
 
   <block wx:else>
-    <view class="header-card">
-      <view class="header-title">{{pageTitle}}</view>
-      <view class="header-meta">版本 {{modelVersion}} · {{modelStatusName}}</view>
-      <view class="header-desc">{{pageDescription}}</view>
+    <view class="model-header">
+      <view class="model-header-title">{{pageTitle}}</view>
+      <view class="model-header-desc">{{pageDescription}}</view>
+
+      <view class="model-meta">
+        <text>版本 {{modelVersion}}</text>
+        <text class="meta-dot">·</text>
+        <text>首次模型</text>
+        <view class="model-status-tag model-status-{{modelStatus}}">
+          {{modelStatusName}}
+        </view>
+      </view>
+
+      <view wx:if="{{modelUpdatedAt}}" class="model-updated">
+        更新时间 {{modelUpdatedAt}}
+      </view>
     </view>
 
-    <view wx:for="{{dimensions}}" wx:key="dimension_id" class="dimension">
-      <view class="dimension-title">{{item.dimension_id}} {{item.dimension_name}}</view>
-      <view wx:for="{{item.variables}}" wx:for-item="variable" wx:key="variable_id" class="variable-card">
+    <view
+      wx:for="{{dimensions}}"
+      wx:key="dimension_id"
+      class="dimension-section"
+    >
+      <view class="dimension-title-row">
+        <view class="dimension-code">{{item.dimension_id}}</view>
+        <view class="dimension-name">{{item.dimension_name}}</view>
+      </view>
+
+      <view
+        wx:for="{{item.variables}}"
+        wx:for-item="variable"
+        wx:key="variable_id"
+        class="variable-card"
+      >
         <view class="variable-top">
-          <view class="variable-name">{{variable.variable_id}} {{variable.variable_name}}</view>
-          <view class="status-tag">{{variable.current_status}}</view>
+          <view class="variable-title-wrap">
+            <view class="variable-code">{{variable.variable_id}}</view>
+            <view class="variable-name">{{variable.variable_name}}</view>
+          </view>
+
+          <view class="confidence-tag confidence-{{variable.status_key}}">
+            {{variable.current_status}}
+          </view>
         </view>
-        <view class="label">当前描述</view>
-        <view class="description">{{variable.current_description}}</view>
-        <view wx:if="{{variable.uncertainty && variable.uncertainty.length}}" class="uncertainty">
-          <view class="label">还不确定的地方</view>
-          <view wx:for="{{variable.uncertainty}}" wx:key="*this" class="uncertainty-item">· {{item}}</view>
+
+        <view class="content-block">
+          <view class="content-label">当前描述</view>
+          <view class="current-state">{{variable.current_description}}</view>
+        </view>
+
+        <view
+          wx:if="{{variable.uncertainty && variable.uncertainty.length > 0}}"
+          class="content-block uncertainty-block"
+        >
+          <view class="content-label">还不确定的地方</view>
+          <view
+            wx:for="{{variable.uncertainty}}"
+            wx:key="*this"
+            class="simple-list-item"
+          >
+            {{item}}
+          </view>
         </view>
       </view>
     </view>
 
-    <view class="caution-card">
-      <view wx:for="{{cautions}}" wx:key="*this" class="caution-item">{{index + 1}}. {{item}}</view>
+    <view wx:if="{{cautions.length > 0}}" class="section-card caution-section">
+      <view class="section-heading">模型说明</view>
+      <view wx:for="{{cautions}}" wx:key="*this" class="caution-item">
+        {{index + 1}}. {{item}}
+      </view>
     </view>
+
+    <view class="bottom-refresh" bindtap="refreshModel">刷新当前模型</view>
   </block>
 </view>

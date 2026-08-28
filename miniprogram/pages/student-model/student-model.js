@@ -1,5 +1,38 @@
+function normalizeTextList(value) {
+  const values = Array.isArray(value) ? value : [value]
+  const emptyValues = ['none', 'null', 'undefined', '无', '暂无', '目前无', '无不确定性']
+
+  return Array.from(new Set(
+    values
+      .map(item => String(item || '').trim())
+      .filter(item => item && !emptyValues.includes(item.toLowerCase()))
+  ))
+}
+
+function getStatusKey(status) {
+  const map = {
+    '证据不足': 'insufficient',
+    '初步描述': 'low',
+    '已有一定支持': 'medium',
+    '较稳定': 'high'
+  }
+
+  return map[String(status || '').trim()] || 'insufficient'
+}
+
+function formatDate(value) {
+  const rawValue = value && value.$date ? value.$date : value
+  const date = rawValue instanceof Date ? rawValue : new Date(rawValue)
+
+  if (!rawValue || Number.isNaN(date.getTime())) return ''
+
+  const pad = number => String(number).padStart(2, '0')
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
+}
+
 Page({
   data: {
+    subjectId: '',
     loading: true,
     hasModel: false,
     errorMessage: '',
@@ -7,6 +40,7 @@ Page({
     modelVersion: '',
     modelStatus: '',
     modelStatusName: '',
+    modelUpdatedAt: '',
     pageTitle: '首次建模结果',
     pageDescription: '',
     dimensions: [],
@@ -20,6 +54,7 @@ Page({
       (binding && binding.student && binding.student.subject_id) ||
       ''
     ).trim()
+    this.setData({ subjectId })
     this.loadModel(subjectId)
   },
 
@@ -52,11 +87,8 @@ Page({
           dimension_name: dimension.dimension_name,
           variables: (Array.isArray(dimension.variables) ? dimension.variables : []).map((variable) => ({
             ...variable,
-            uncertainty: Array.isArray(variable.uncertainty)
-              ? variable.uncertainty
-              : String(variable.uncertainty || '').trim()
-                ? [String(variable.uncertainty).trim()]
-                : []
+            status_key: getStatusKey(variable.current_status),
+            uncertainty: normalizeTextList(variable.uncertainty)
           }))
         }))
 
@@ -67,6 +99,7 @@ Page({
         modelVersion: result.model_version || '',
         modelStatus,
         modelStatusName: result.model_status_name || (modelStatus === 'draft' ? '待复核' : '已复核'),
+        modelUpdatedAt: formatDate(result.updated_at || result.created_at),
         pageTitle: modelStatus === 'draft' ? '首次建模结果（待复核）' : '当前学生模型',
         pageDescription: '当前结果基于首次采集形成，后续仍可根据新的信息持续完善。',
         dimensions,
@@ -76,5 +109,9 @@ Page({
       console.error('读取 Student-M0 失败：', error)
       this.setData({ loading: false, hasModel: false, errorMessage: '读取 Student-M0 失败' })
     }
+  },
+
+  refreshModel() {
+    this.loadModel(this.data.subjectId)
   }
 })

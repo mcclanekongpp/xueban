@@ -2,7 +2,7 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；真人试采候选版 `1.0.4` 已上传为微信小程序开发版本，当前实施优先级是微信平台隐私核对、审核与发布，随后进入真人教师和学生主体模型采集测试；只修复阻断真实采集、人工审核或首次模型构建的问题。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，当前实施优先级是微信平台隐私核对、审核与发布，随后进入真人教师和学生主体模型采集测试；只修复阻断真实采集、人工审核或首次模型构建的问题。
 
 Evidence Profile、Evidence Gap、Targeted Supplement、Stagnation、Unmatched 聚类、Model Change Candidate 和自动版本更新继续保留在总体架构中，但当前暂停深入开发；除非它们阻断首次模型构建，不进入近期实现范围。学生第一版以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
@@ -89,7 +89,7 @@ Student Home（17/17）
 
 无匹配时仍保存 Voice、Message、`continuous_record_id` 与 no-match reason，不制造 Evidence。ASR、路由或 Analysis 失败时保留原始记录并允许重试。持续 Evidence 仅进入证据层，不修改 active Student-M0、不生成 Student-M1、不改变 current snapshot。
 
-正式页面复用 `analyzeStudentEvidence` 已配置的 120 秒运行环境完成 AI 内容路由；独立的 `submitStudentContinuousRecord` 当前保留为无前端入口的实现，不作为 1.0.4 正式调用链，避免其云端默认 3 秒运行限制阻断真人提交。
+正式页面复用 `analyzeStudentEvidence` 已配置的 120 秒运行环境完成 AI 内容路由；独立的 `submitStudentContinuousRecord` 当前保留为无前端入口的实现，不作为 1.0.5 正式调用链，避免其云端默认 3 秒运行限制阻断真人提交。
 
 ## 0.4 真人试采发布边界
 
@@ -97,7 +97,9 @@ Student Home（17/17）
 - TEST 辅助脚本和无前端入口的 TEST 云函数可留在开发环境，但真人流程不得生成 `is_test = true` 或 `test_source = simulated_transcript` 的记录。
 - 真人 Student 的 `buildStudentInitialModel` 只创建 draft。`approveStudentInitialModel` 仅 researcher / admin 可对真人主体受控执行，普通 Guardian 无审批权限；teacher 仅可在本人 active binding 下查看或审批 TEST Student。
 - 普通 Guardian 不直接访问数据库，只能读取本人 active binding 对应的安全 Student-M0 摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash` 或 `bind_code_hash`。所有学生采集授权继续以当前 user 的 active `guardian_student_bindings` 为边界。
-- 微信小程序开发版本 `1.0.4` 已上传；微信公众平台隐私声明确认、提交审核与正式发布属于平台管理员操作，不由开发版本上传自动完成。`1.0.3` 不再用于送审。
+- 教师首页持续采集只保留 `teaching_reflection`、`student_observation`、`free_dialogue` 三个已实现入口；重复的泛化语音入口和未开发的记录中心不进入正式页面。Teacher Record Center 作为非阻断 TODO 保留。
+- 教师/学生逐项采集采用一致的页面宽度、进度、任务卡、录音、提交与状态反馈结构；教师/学生模型采用一致的版本状态、一级维度、二级变量、四级状态标签、当前描述与可选不确定性结构。学生采集文案继续保持儿童友好，不显示技术术语。
+- 微信小程序开发版本 `1.0.5` 已上传；微信公众平台隐私声明确认、提交审核与正式发布属于平台管理员操作，不由开发版本上传自动完成。`1.0.4` 不再用于送审。
 
 ## 1. 总体架构
 

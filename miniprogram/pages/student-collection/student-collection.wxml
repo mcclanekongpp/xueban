@@ -1,5 +1,8 @@
 <view class="page">
-  <view wx:if="{{loading}}" class="state-card">正在准备下一项...</view>
+  <view wx:if="{{loading}}" class="state-card">
+    <view class="state-title">正在准备下一项</view>
+    <view class="state-desc">请稍候</view>
+  </view>
 
   <view wx:elif="{{collectionCompleted}}" class="completion-card">
     <view class="completion-title">谢谢你，今天的分享完成啦</view>
@@ -8,8 +11,16 @@
   </view>
 
   <block wx:else>
+    <view class="header">
+      <view class="title">首次采集</view>
+      <view class="subtitle">按照自己的真实经历和想法回答即可，没有标准答案</view>
+    </view>
+
     <view wx:if="{{currentTask}}" class="task-card">
-      <view class="progress">第 {{currentTask.task_order}} 项，共 17 项</view>
+      <view class="task-progress">第 {{currentTask.task_order}} 项，共 17 项</view>
+      <view class="progress-track">
+        <view class="progress-fill" style="width: {{taskProgressPercent}}%;"></view>
+      </view>
       <view class="task-title">{{currentTask.title}}</view>
       <view class="task-prompt">{{currentTask.prompt_text}}</view>
     </view>
@@ -30,7 +41,7 @@
         <view class="voice-text">{{isRecording ? '正在听你说' : '按住说话'}}</view>
       </view>
       <view class="voice-tip">
-        {{isRecording ? '松开结束' : isUploading ? '正在保存' : isTranscribing ? '正在整理' : '想到什么就说什么，没有标准答案'}}
+        {{isRecording ? '松开结束录音' : isSubmitting ? '正在分析并提交' : isUploading ? '正在保存录音' : isTranscribing ? '正在识别语音' : '请尽量在安静环境中使用'}}
       </view>
     </view>
 
@@ -39,7 +50,7 @@
       disabled="{{!canSubmit || isSubmitting}}"
       bindtap="submitTask"
     >
-      {{isSubmitting ? '正在提交...' : '提交并进入下一项'}}
+      {{isSubmitting ? '正在提交…' : '提交并进入下一项'}}
     </button>
   </block>
 </view>

@@ -1,3 +1,24 @@
+function normalizeTextList(value) {
+  const values = Array.isArray(value) ? value : [value]
+  const emptyValues = ['none', 'null', 'undefined', '无', '暂无', '目前无', '无不确定性']
+
+  return Array.from(new Set(
+    values
+      .map(item => String(item || '').trim())
+      .filter(item => item && !emptyValues.includes(item.toLowerCase()))
+  ))
+}
+
+function formatDate(value) {
+  const rawValue = value && value.$date ? value.$date : value
+  const date = rawValue instanceof Date ? rawValue : new Date(rawValue)
+
+  if (!rawValue || Number.isNaN(date.getTime())) return ''
+
+  const pad = number => String(number).padStart(2, '0')
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
+}
+
 Page({
 
   data: {
@@ -12,6 +33,12 @@ Page({
     modelVersion: '',
 
     snapshotType: '',
+
+    modelStatus: 'active',
+
+    modelStatusName: '已复核',
+
+    modelUpdatedAt: '',
 
     background: null,
 
@@ -159,6 +186,11 @@ Page({
                               variable.confidence
                             ),
 
+                          uncertainty:
+                            normalizeTextList(
+                              variable.uncertainty
+                            ),
+
                           evidence_count:
                             Array.isArray(
                               variable.evidence_basis
@@ -198,6 +230,18 @@ Page({
         snapshotType:
           result.snapshot_type ||
           '',
+
+        modelStatus:
+          'active',
+
+        modelStatusName:
+          '已复核',
+
+        modelUpdatedAt:
+          formatDate(
+            result.updated_at ||
+            result.created_at
+          ),
 
         background:
           model.background ||

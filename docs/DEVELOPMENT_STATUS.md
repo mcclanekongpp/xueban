@@ -5,11 +5,30 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.4` 已上传为微信小程序开发版本，尚未提交审核或正式发布。`1.0.3` 已被替代，不再用于送审。
+真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，尚未提交审核或正式发布。`1.0.4` 已被替代，不再用于送审。
 
-当前最高优先级：**完成微信公众平台隐私保护指引核对、提交 `1.0.4` 审核并发布，然后组织真人教师和学生主体模型采集测试**。
+当前最高优先级：**完成微信公众平台隐私保护指引核对、提交 `1.0.5` 审核并发布，然后组织真人教师和学生主体模型采集测试**。
 
-## 真人试采候选版本 1.0.4（2026-08-28）
+## 真人试采候选版本 1.0.5（2026-08-28）
+
+- [x] 教师首次逐项采集与学生首次逐项采集统一页面宽度、进度条、任务卡、录音区、提交按钮和状态反馈层级
+- [x] `teacher-model` 与 `student-model` 统一模型版本/状态、一级维度、二级变量、四级状态标签、当前描述和可选不确定性布局
+- [x] `student-home` 按教师首页的卡片层级整理首次采集、首次建模结果与“再说一说”，继续使用家庭/儿童可理解的文案
+- [x] 教师首页删除与自由记录重复的“语音记录”入口，底层 Voice / ASR 能力保持不变
+- [x] 教师首页删除尚未开发的“我的记录”入口；Teacher Record Center 记为非阻断 TODO
+- [x] 教师持续采集保留今日教学反思、学生观察记录、自由记录三个已实现入口
+- [x] 教师身份确认后复用 `T_MT78AZ2K_WINH7` 并进入 teacher-home；13/13 与 active snapshot `MS_MT873ZQI_9PEUL` 未改变
+- [x] Student Binding、17/17、active snapshot `MS_MTBMDOF7_0MNQU`、student-model 与 student-continuous 回归通过
+- [x] 57 个 JS 文件通过 `node --check`，91 个 JSON 文件解析通过，相关 WXML / WXSS 及微信开发者工具完整编译通过
+- [x] 模拟器 Console / Network 无 error；教师/学生采集页与模型页小屏截图核验通过
+- [x] `1.0.5` 已于 2026-08-28 17:42:51 CST 上传为开发版本，AppID = `wx962acbf120074da9`，代码包 796421 bytes
+- [ ] 微信公众平台隐私保护指引需管理员登录后最终核对
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
+
+版本说明：优化教师与学生采集及模型展示界面，清理无效入口。
+
+## 历史候选版本 1.0.4（2026-08-28）
 
 - [x] 正式入口已移除 QuickStart / 配置助手 / TEST 页面暴露，遗留 QuickStart 页面已排除出上传包
 - [x] 真人采集链不会调用 `createStudentTestVoiceRecord`，不会自动产生 `test_source = simulated_transcript`
@@ -205,7 +224,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 ## 六、当前第一优先级
 
-先完成微信公众平台隐私保护指引核对、提交 `1.0.4` 审核与发布，再组织真人教师和学生主体模型采集测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id；Evidence Profile 等增强机制不作为当前优先项。
+先完成微信公众平台隐私保护指引核对、提交 `1.0.5` 审核与发布，再组织真人教师和学生主体模型采集测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id；Evidence Profile 等增强机制不作为当前优先项。
 
 ## 七、学生端状态
 
@@ -247,7 +266,8 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 - `subjects.current_version` 当前为空，但 active snapshot 可被 `getTeacherCurrentModel` 正常读取；首次模型 MVP 不受阻断，后续统一版本指针规则。
 - 当前 active snapshot 保存的 T0 教龄为 8 年，而当前 active `subject_background` 为 9 年；snapshot 按版本不可变，后续在新的首次采集前明确 T0 修改与模型重建规则。
-- `submitTeacherContinuousRecord` 的独立云端运行时仍是 3 秒且无正式前端入口；1.0.4 已改由 `analyzeTeacherEvidence(action = route_continuous)` 承担正式教师持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断真人流程。
+- `submitTeacherContinuousRecord` 的独立云端运行时仍是 3 秒且无正式前端入口；1.0.5 继续由 `analyzeTeacherEvidence(action = route_continuous)` 承担正式教师持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断真人流程。
+- Teacher Record Center / “我的记录”尚未形成正式业务闭环，已从正式首页移除；后续统一设计，不阻断当前真人试采。
 - `security_follow_up`：正式前端或自动调用链接入前，统一设计 subject authorization。
 - `identity_map` 当前实际只用于 users ↔ Teacher Subject，不适合直接承载 Student_ID ↔ 学号；正式学生身份主表扩展后续统一设计。本轮在线双重校验依赖 `student_bind_codes.student_no_hash` 与线下研究主表。
 - Student Binding MVP 当前限制一个 Student_ID 同时只有一个 active guardian binding；换绑、多监护人和撤销后的重新发码后续开发。
@@ -255,7 +275,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 - 本轮保留少量 `inactive + is_test=true` 权限探针记录，用于证明 ADMINONLY 生效；不参与 active School 查询。
 - Student Evidence Analysis 的个别 TEST 返回使用了字符串 `none` 表示无不确定性；后续生成新快照前统一将这类语义空值标准化为空，不修改已审批的测试快照。
 - `createStudentTestVoiceRecord` 是无正式前端入口、且只允许 active TEST Student 的开发辅助函数；正式页面不得调用。配置辅助函数已限制为 researcher / admin，仍应保持无普通前端入口。
-- `submitStudentContinuousRecord` 的独立云端运行时当前仍是 3 秒且无正式前端入口；1.0.4 已改由 `analyzeStudentEvidence(action = route_continuous)` 承担正式持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断当前真人流程。
+- `submitStudentContinuousRecord` 的独立云端运行时当前仍是 3 秒且无正式前端入口；1.0.5 继续由 `analyzeStudentEvidence(action = route_continuous)` 承担正式持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断当前真人流程。
 - 当前 17 个任务是一变量一短任务的 MVP 技术组织方式；真实儿童试采后再决定是否重组为自然交流、任务活动、行为观察或微采集。
 
 ## 十、明确不做的事情

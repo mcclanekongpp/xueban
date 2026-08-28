@@ -11,7 +11,7 @@
   <text class="title">
     {{
       sessionType === 'initial_interview'
-        ? '首次交流'
+        ? '首次采集'
         : sessionType === 'teaching_reflection'
           ? '教学反思'
           : sessionType === 'student_observation'
@@ -23,7 +23,7 @@
   <text class="subtitle">
     {{
       sessionType === 'initial_interview'
-        ? '按照自己的真实经历和想法回答即可'
+        ? '按照自己的真实经历和想法回答即可，没有标准答案'
         : sessionType === 'teaching_reflection'
           ? '记录刚刚发生的教学经历、判断和调整'
           : sessionType === 'student_observation'
@@ -48,7 +48,7 @@
   >
 
     <text class="completion-title">
-      首次交流已完成
+      首次采集已完成
     </text>
 
     <text class="completion-text">
@@ -70,6 +70,13 @@
         <text class="task-progress-text">
           第 {{currentTask.task_order}} 项，共 13 项
         </text>
+      </view>
+
+      <view class="progress-track">
+        <view
+          class="progress-fill"
+          style="width: {{taskProgressPercent}}%;"
+        ></view>
       </view>
 
       <text class="task-title">
@@ -189,7 +196,7 @@
 >
 
   <view
-    class="voice-button"
+    class="voice-button {{isRecording ? 'recording' : ''}}"
     bindtouchstart="startRecording"
     bindtouchend="stopRecording"
     bindtouchcancel="stopRecording"
@@ -210,6 +217,8 @@
     {{
       isRecording
         ? '松开结束录音'
+        : isCompletingTask
+          ? '正在分析并提交'
         : isUploading
           ? '正在保存录音'
           : isTranscribing
@@ -232,7 +241,7 @@
     {{
       isCompletingTask
         ? '正在提交…'
-        : '完成本题'
+        : '提交并进入下一项'
     }}
   </button>
 

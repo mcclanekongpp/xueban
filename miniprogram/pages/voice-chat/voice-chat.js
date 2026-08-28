@@ -83,6 +83,8 @@ Page({
 
     currentVariableId: '',
 
+    taskProgressPercent: 0,
+
     canCompleteTask: false,
 
     collectionCompleted: false
@@ -347,6 +349,9 @@ Page({
             currentVariableId:
               '',
 
+            taskProgressPercent:
+              100,
+
             sessionId:
               '',
 
@@ -397,6 +402,16 @@ Page({
 
           currentVariableId:
             task.variable_id,
+
+          taskProgressPercent:
+            Math.min(
+              100,
+              Math.max(
+                0,
+                Number(task.task_order || 1) /
+                  13 * 100
+              )
+            ),
 
           collectionCompleted:
             false,
@@ -1308,6 +1323,9 @@ Page({
             currentVariableId:
               '',
 
+            taskProgressPercent:
+              100,
+
             sessionId:
               '',
 
@@ -1368,6 +1386,16 @@ Page({
 
           currentVariableId:
             nextTask.variable_id,
+
+          taskProgressPercent:
+            Math.min(
+              100,
+              Math.max(
+                0,
+                Number(nextTask.task_order || 1) /
+                  13 * 100
+              )
+            ),
 
           sessionId:
             '',

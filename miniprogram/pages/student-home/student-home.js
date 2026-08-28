@@ -6,6 +6,7 @@ Page({
     organization: null,
     background: null,
     progress: null,
+    progressPercent: 0,
     collectionStatusText: '未开始',
     collectionCompleted: false,
     modelLoading: false,
@@ -83,6 +84,7 @@ Page({
           completed_tasks: completedTasks,
           status: progress.status || 'not_started'
         },
+        progressPercent: Math.max(0, Math.min(100, Math.round((completedTasks / 17) * 100))),
         collectionStatusText: statusText,
         collectionCompleted: completed,
         loading: false

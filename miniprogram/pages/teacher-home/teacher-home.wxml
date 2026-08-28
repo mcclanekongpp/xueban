@@ -132,35 +132,9 @@
 </view>
 
 
-<!-- 主语音记录入口 -->
-
-<view
-  class="voice-main-card"
-  bindtap="startVoice"
->
-  <view class="voice-main-icon">
-    🎙
-  </view>
-
-  <view class="voice-main-content">
-    <view class="voice-main-title">
-      语音记录
-    </view>
-
-    <view class="voice-main-desc">
-      随时记录教学中的想法、判断和经验
-    </view>
-  </view>
-
-  <view class="card-arrow">
-    ›
-  </view>
+<view class="section-desc">
+  选择最接近当前内容的方式，每次录音单独保存和分析。
 </view>
-
-
-<!-- ==================================================
-     常用记录
-     ================================================== -->
 
 <view class="record-grid">
 
@@ -207,7 +181,7 @@
   <!-- 自由记录 -->
 
   <view
-    class="record-card"
+    class="record-card record-card-wide"
     bindtap="startFreeRecord"
   >
     <view class="record-icon">
@@ -223,25 +197,6 @@
     </view>
   </view>
 
-
-  <!-- 历史记录 -->
-
-  <view
-    class="record-card"
-    bindtap="openConversation"
-  >
-    <view class="record-icon">
-      ≡
-    </view>
-
-    <view class="record-title">
-      我的记录
-    </view>
-
-    <view class="record-desc">
-      查看已经保存的记录
-    </view>
-  </view>
 
 </view>
 

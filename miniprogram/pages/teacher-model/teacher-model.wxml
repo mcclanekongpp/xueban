@@ -53,7 +53,7 @@
 
   <view class="model-header">
     <view class="model-header-title">
-      当前教师主体模型
+      当前教师模型
     </view>
 
     <view class="model-header-desc">
@@ -64,6 +64,13 @@
       <text>版本 {{modelVersion}}</text>
       <text class="meta-dot">·</text>
       <text>{{snapshotType === 'initial' ? '首次模型' : '当前模型'}}</text>
+      <view class="model-status-tag model-status-{{modelStatus}}">
+        {{modelStatusName}}
+      </view>
+    </view>
+
+    <view wx:if="{{modelUpdatedAt}}" class="model-updated">
+      更新时间 {{modelUpdatedAt}}
     </view>
   </view>
 
@@ -195,6 +202,26 @@
       </view>
 
 
+      <!-- 不确定性 -->
+
+      <view
+        wx:if="{{variable.uncertainty && variable.uncertainty.length > 0}}"
+        class="content-block uncertainty-block"
+      >
+        <view class="content-label">
+          还不确定的地方
+        </view>
+
+        <view
+          wx:for="{{variable.uncertainty}}"
+          wx:key="*this"
+          class="simple-list-item"
+        >
+          {{item}}
+        </view>
+      </view>
+
+
       <!-- 证据依据 -->
 
       <view
@@ -234,26 +261,6 @@
 
         <view
           wx:for="{{variable.contexts}}"
-          wx:key="*this"
-          class="simple-list-item"
-        >
-          {{item}}
-        </view>
-      </view>
-
-
-      <!-- 不确定性 -->
-
-      <view
-        wx:if="{{variable.uncertainty && variable.uncertainty.length > 0}}"
-        class="content-block uncertainty-block"
-      >
-        <view class="content-label">
-          当前限制
-        </view>
-
-        <view
-          wx:for="{{variable.uncertainty}}"
           wx:key="*this"
           class="simple-list-item"
         >

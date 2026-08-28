@@ -5,6 +5,7 @@ Page({
     subjectId: '',
     loading: true,
     currentTask: null,
+    taskProgressPercent: 0,
     progress: null,
     sessionId: '',
     isRecording: false,
@@ -77,6 +78,7 @@ Page({
           loading: false,
           collectionCompleted: true,
           currentTask: null,
+          taskProgressPercent: 100,
           progress: result.progress
         })
         return
@@ -102,6 +104,10 @@ Page({
         loading: false,
         collectionCompleted: false,
         currentTask: result.task,
+        taskProgressPercent: Math.min(
+          100,
+          Math.max(0, Number(result.task.task_order || 1) / 17 * 100)
+        ),
         progress: result.progress,
         sessionId: sessionResult.session.session_id,
         lastTranscript: restored,
@@ -252,6 +258,7 @@ Page({
           isSubmitting: false,
           collectionCompleted: true,
           currentTask: null,
+          taskProgressPercent: 100,
           progress: completed.progress,
           canSubmit: false
         })

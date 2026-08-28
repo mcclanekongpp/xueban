@@ -1,18 +1,17 @@
 <view class="page">
-  <view wx:if="{{loading}}" class="loading">
-    正在读取学生绑定...
+  <view wx:if="{{loading}}" class="state-card">
+    <view class="state-title">正在读取学生采集信息</view>
+    <view class="state-desc">请稍候</view>
   </view>
 
   <block wx:else>
-    <view class="status-card">
-      <view class="status-icon">✓</view>
-      <view class="status-title">学生采集</view>
-      <view class="status-desc">
-        当前微信已连接到学生研究编号
-      </view>
+    <view class="header">
+      <view class="header-title">学生采集</view>
+      <view class="header-desc">记录真实的想法和经历，完成首次采集后还可以随时再说一说</view>
     </view>
 
     <view wx:if="{{student}}" class="info-card">
+      <view class="info-heading">当前学生</view>
       <view class="info-row" wx:if="{{student.research_alias}}">
         <view class="info-label">研究昵称</view>
         <view class="info-value">{{student.research_alias}}</view>
@@ -29,43 +28,41 @@
       </view>
     </view>
 
-    <view wx:if="{{progress}}" class="progress-card">
-      <view class="progress-title">首次采集：{{collectionStatusText}}</view>
-      <view class="progress-count">{{progress.completed_tasks}} / {{progress.total_tasks}}</view>
+    <view wx:if="{{progress}}" class="initial-card" bindtap="openCollection">
+      <view class="initial-top-row">
+        <view class="initial-tag">{{collectionStatusText}}</view>
+        <view class="initial-progress">{{progress.completed_tasks}} / {{progress.total_tasks}}</view>
+      </view>
+      <view class="initial-title">{{collectionCompleted ? '首次采集已完成' : '首次采集'}}</view>
+      <view class="initial-desc">
+        {{collectionCompleted ? '谢谢你的认真分享，本次首次采集内容已经保存。' : '按照自己的真实经历和想法回答即可，没有标准答案。'}}
+      </view>
+      <view class="progress-track">
+        <view class="progress-fill" style="width: {{progressPercent}}%;"></view>
+      </view>
+      <view wx:if="{{!collectionCompleted}}" class="initial-action">
+        {{progress.completed_tasks > 0 ? '继续首次采集' : '开始首次采集'}}<text class="initial-arrow">›</text>
+      </view>
     </view>
 
-    <button
-      wx:if="{{!collectionCompleted}}"
-      class="next-button"
-      bindtap="openCollection"
-    >
-      {{progress.completed_tasks > 0 ? '继续首次采集' : '开始首次采集'}}
-    </button>
-
-    <block wx:else>
-      <view class="completed-card">首次采集已完成</view>
-
-      <view class="action-card">
-        <view class="action-title">首次建模结果</view>
-        <view class="action-desc">
-          {{modelLoading ? '正在读取结果状态' : modelStatusText}}
-        </view>
-        <button
-          wx:if="{{hasModel}}"
-          class="secondary-button"
-          bindtap="openModel"
-        >
-          查看首次建模结果
-        </button>
-        <view wx:else class="pending-text">结果生成后可以在这里查看</view>
+    <view wx:if="{{collectionCompleted}}" class="section-title">首次建模结果</view>
+    <view wx:if="{{collectionCompleted}}" class="action-card" bindtap="openModel">
+      <view class="action-content">
+        <view class="action-title">查看首次建模结果</view>
+        <view class="action-desc">{{modelLoading ? '正在读取结果状态' : modelStatusText}}</view>
+        <view wx:if="{{!hasModel && !modelLoading}}" class="pending-text">结果生成后可以在这里查看</view>
       </view>
+      <view wx:if="{{hasModel}}" class="card-arrow">›</view>
+    </view>
 
-      <view class="action-card">
-        <view class="action-title">继续参与</view>
-        <view class="action-desc">有新的发现、想法或经历时，随时可以再说一说。</view>
-        <button class="next-button" bindtap="openContinuous">再说一说</button>
+    <view wx:if="{{collectionCompleted}}" class="section-title">继续参与</view>
+    <view wx:if="{{collectionCompleted}}" class="action-card" bindtap="openContinuous">
+      <view class="action-content">
+        <view class="action-title">再说一说</view>
+        <view class="action-desc">有新的发现、想法或经历时，随时可以再分享一段。</view>
       </view>
-    </block>
+      <view class="card-arrow">›</view>
+    </view>
 
     <view class="note">
       当前微信账号仅作为认证后的采集终端。请让学生本人自然回答，不评价对错。
