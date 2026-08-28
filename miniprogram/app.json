@@ -1,0 +1,24 @@
+{
+  "pages": [
+    "pages/role-select/role-select",
+    "pages/teacher-home/teacher-home",
+    "pages/voice-chat/voice-chat",
+    "pages/teacher-background/teacher-background",
+    "pages/teacher-model/teacher-model",
+    "pages/student-bind/student-bind",
+    "pages/student-home/student-home",
+    "pages/student-collection/student-collection",
+    "pages/student-continuous/student-continuous",
+    "pages/student-model/student-model"
+  ],
+  "window": {
+    "backgroundColor": "#F6F6F6",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#F6F6F6",
+    "navigationBarTitleText": "主体模型采集",
+    "navigationBarTextStyle": "black"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

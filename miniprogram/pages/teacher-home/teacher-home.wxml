@@ -1,0 +1,315 @@
+<view class="page">
+
+<!-- ==================================================
+     页面标题
+     ================================================== -->
+
+<view class="header">
+  <view class="header-title">
+    教师主体模型
+  </view>
+
+  <view class="header-desc">
+    持续记录教学经历与思考，逐步形成可更新的教师主体模型
+  </view>
+</view>
+
+
+<!-- ==================================================
+     基本信息
+     T0 客观背景资料
+     ================================================== -->
+
+<view
+  class="background-card"
+  bindtap="openBackground"
+>
+  <view class="background-content">
+    <view class="background-title">
+      基本信息
+    </view>
+
+    <view class="background-desc">
+      查看和更新教龄、学历、专业背景及教学经历
+    </view>
+  </view>
+
+  <view class="background-arrow">
+    ›
+  </view>
+</view>
+
+
+<!-- ==================================================
+     首次建模采集
+     ================================================== -->
+
+<view
+  wx:if="{{!initialProgressLoaded}}"
+  class="initial-card"
+>
+  <view class="initial-card-title">
+    正在读取首次建模进度...
+  </view>
+</view>
+
+
+<!-- 首次建模已经完成 -->
+
+<view
+  wx:elif="{{collectionCompleted}}"
+  class="initial-card"
+>
+  <view class="initial-top-row">
+
+    <view class="initial-tag">
+      已完成
+    </view>
+
+    <view class="initial-progress">
+      {{completedCount}} / {{totalTasks}}
+    </view>
+
+  </view>
+
+  <view class="initial-card-title">
+    首次建模采集已完成
+  </view>
+
+  <view class="initial-card-desc">
+    首次访谈资料已经完成采集，后续记录将继续用于丰富和更新教师主体模型。
+  </view>
+</view>
+
+
+<!-- 首次建模尚未完成 -->
+
+<view
+  wx:else
+  class="initial-card"
+  bindtap="startInitialInterview"
+>
+  <view class="initial-top-row">
+
+    <view class="initial-tag">
+      {{completedCount === 0 ? '首次使用' : '继续采集'}}
+    </view>
+
+    <view class="initial-progress">
+      {{completedCount}} / {{totalTasks}}
+    </view>
+
+  </view>
+
+  <view class="initial-card-title">
+    {{completedCount === 0 ? '完成首次建模采集' : '继续首次建模采集'}}
+  </view>
+
+  <view class="initial-card-desc">
+    通过一组预设访谈任务，了解你的课程理解、学生判断、教学策略、互动方式与专业思考。
+  </view>
+
+  <view
+    wx:if="{{currentTaskTitle}}"
+    class="initial-next"
+  >
+    下一项：{{currentTaskTitle}}
+  </view>
+
+  <view class="initial-action">
+    {{completedCount === 0 ? '开始采集' : '继续采集'}}
+    <text class="initial-arrow">›</text>
+  </view>
+</view>
+
+
+<!-- ==================================================
+     持续记录
+     ================================================== -->
+
+<view class="section-title">
+  持续记录
+</view>
+
+
+<!-- 主语音记录入口 -->
+
+<view
+  class="voice-main-card"
+  bindtap="startVoice"
+>
+  <view class="voice-main-icon">
+    🎙
+  </view>
+
+  <view class="voice-main-content">
+    <view class="voice-main-title">
+      语音记录
+    </view>
+
+    <view class="voice-main-desc">
+      随时记录教学中的想法、判断和经验
+    </view>
+  </view>
+
+  <view class="card-arrow">
+    ›
+  </view>
+</view>
+
+
+<!-- ==================================================
+     常用记录
+     ================================================== -->
+
+<view class="record-grid">
+
+  <!-- 今日教学反思 -->
+
+  <view
+    class="record-card"
+    bindtap="startTeachingReflection"
+  >
+    <view class="record-icon">
+      ✎
+    </view>
+
+    <view class="record-title">
+      今日教学反思
+    </view>
+
+    <view class="record-desc">
+      记录课堂之后的判断与调整
+    </view>
+  </view>
+
+
+  <!-- 学生观察 -->
+
+  <view
+    class="record-card"
+    bindtap="startStudentObservation"
+  >
+    <view class="record-icon">
+      ◉
+    </view>
+
+    <view class="record-title">
+      学生观察记录
+    </view>
+
+    <view class="record-desc">
+      记录课堂中的学生表现与变化
+    </view>
+  </view>
+
+
+  <!-- 自由记录 -->
+
+  <view
+    class="record-card"
+    bindtap="startFreeRecord"
+  >
+    <view class="record-icon">
+      ＋
+    </view>
+
+    <view class="record-title">
+      自由记录
+    </view>
+
+    <view class="record-desc">
+      记录其他值得保留的教学信息
+    </view>
+  </view>
+
+
+  <!-- 历史记录 -->
+
+  <view
+    class="record-card"
+    bindtap="openConversation"
+  >
+    <view class="record-icon">
+      ≡
+    </view>
+
+    <view class="record-title">
+      我的记录
+    </view>
+
+    <view class="record-desc">
+      查看已经保存的记录
+    </view>
+  </view>
+
+</view>
+
+
+<!-- ==================================================
+     当前教师主体模型
+     ================================================== -->
+
+<view class="section-title model-section-title">
+  当前模型
+</view>
+
+<view
+  class="model-card"
+  bindtap="openModel"
+>
+  <view class="model-content">
+
+    <view class="model-title">
+      查看当前教学思想模型
+    </view>
+
+    <view class="model-desc">
+      基于持续积累的证据，逐步形成并更新当前教师主体模型
+    </view>
+
+  </view>
+
+  <view class="card-arrow">
+    ›
+  </view>
+</view>
+
+
+<!-- ==================================================
+     独立学生采集入口
+     ================================================== -->
+
+<view class="section-title">
+  学生采集
+</view>
+
+<view
+  class="student-entry-card"
+  bindtap="openStudentCollection"
+>
+  <view class="student-entry-content">
+    <view class="student-entry-title">
+      进入学生采集
+    </view>
+
+    <view class="student-entry-desc">
+      使用线下发放的绑定码连接独立 Student Subject
+    </view>
+  </view>
+
+  <view class="card-arrow">
+    ›
+  </view>
+</view>
+
+
+<!-- ==================================================
+     底部说明
+     ================================================== -->
+
+<view class="page-note">
+  记录用于持续理解教学实践与思想变化，不用于教师能力评分。
+</view>
+
+</view>

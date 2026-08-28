@@ -1,0 +1,9 @@
+{
+  "name": "registerStudentForStudy",
+  "version": "1.0.0",
+  "description": "Register an offline-consented student subject and issue a one-time binding code",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

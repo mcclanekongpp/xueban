@@ -1,0 +1,10 @@
+{
+  "name": "submitTeacherContinuousRecord",
+  "version": "1.0.0",
+  "description": "Submit teacher continuous voice record and route evidence to teacher model variables",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.11.0",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

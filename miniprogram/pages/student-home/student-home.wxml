@@ -1,0 +1,74 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">
+    正在读取学生绑定...
+  </view>
+
+  <block wx:else>
+    <view class="status-card">
+      <view class="status-icon">✓</view>
+      <view class="status-title">学生采集</view>
+      <view class="status-desc">
+        当前微信已连接到学生研究编号
+      </view>
+    </view>
+
+    <view wx:if="{{student}}" class="info-card">
+      <view class="info-row" wx:if="{{student.research_alias}}">
+        <view class="info-label">研究昵称</view>
+        <view class="info-value">{{student.research_alias}}</view>
+      </view>
+
+      <view class="info-row">
+        <view class="info-label">研究编号</view>
+        <view class="info-value code">{{student.subject_id}}</view>
+      </view>
+
+      <view class="info-row info-row-last">
+        <view class="info-label">主体状态</view>
+        <view class="info-value">有效</view>
+      </view>
+    </view>
+
+    <view wx:if="{{progress}}" class="progress-card">
+      <view class="progress-title">首次采集：{{collectionStatusText}}</view>
+      <view class="progress-count">{{progress.completed_tasks}} / {{progress.total_tasks}}</view>
+    </view>
+
+    <button
+      wx:if="{{!collectionCompleted}}"
+      class="next-button"
+      bindtap="openCollection"
+    >
+      {{progress.completed_tasks > 0 ? '继续首次采集' : '开始首次采集'}}
+    </button>
+
+    <block wx:else>
+      <view class="completed-card">首次采集已完成</view>
+
+      <view class="action-card">
+        <view class="action-title">首次建模结果</view>
+        <view class="action-desc">
+          {{modelLoading ? '正在读取结果状态' : modelStatusText}}
+        </view>
+        <button
+          wx:if="{{hasModel}}"
+          class="secondary-button"
+          bindtap="openModel"
+        >
+          查看首次建模结果
+        </button>
+        <view wx:else class="pending-text">结果生成后可以在这里查看</view>
+      </view>
+
+      <view class="action-card">
+        <view class="action-title">继续参与</view>
+        <view class="action-desc">有新的发现、想法或经历时，随时可以再说一说。</view>
+        <button class="next-button" bindtap="openContinuous">再说一说</button>
+      </view>
+    </block>
+
+    <view class="note">
+      当前微信账号仅作为认证后的采集终端。请让学生本人自然回答，不评价对错。
+    </view>
+  </block>
+</view>

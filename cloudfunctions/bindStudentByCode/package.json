@@ -1,0 +1,9 @@
+{
+  "name": "bindStudentByCode",
+  "version": "1.0.0",
+  "description": "Bind the current authenticated WeChat operator to a Student Subject",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

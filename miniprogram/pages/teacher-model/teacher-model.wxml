@@ -1,0 +1,302 @@
+<view class="page">
+
+<!-- ==================================================
+     加载中
+     ================================================== -->
+
+<view
+  wx:if="{{isLoading}}"
+  class="state-card"
+>
+  <view class="state-title">
+    正在读取教师主体模型
+  </view>
+
+  <view class="state-desc">
+    请稍候
+  </view>
+</view>
+
+
+<!-- ==================================================
+     无模型 / 读取失败
+     ================================================== -->
+
+<view
+  wx:elif="{{!hasModel}}"
+  class="state-card"
+>
+  <view class="state-title">
+    暂无可查看的教师主体模型
+  </view>
+
+  <view class="state-desc">
+    {{errorMessage}}
+  </view>
+
+  <view
+    class="refresh-button"
+    bindtap="refreshModel"
+  >
+    重新读取
+  </view>
+</view>
+
+
+<!-- ==================================================
+     正式模型
+     ================================================== -->
+
+<block wx:else>
+
+  <!-- 顶部说明 -->
+
+  <view class="model-header">
+    <view class="model-header-title">
+      当前教师主体模型
+    </view>
+
+    <view class="model-header-desc">
+      基于首次建模采集形成的当前主体表征，后续将随新的课堂证据持续更新。
+    </view>
+
+    <view class="model-meta">
+      <text>版本 {{modelVersion}}</text>
+      <text class="meta-dot">·</text>
+      <text>{{snapshotType === 'initial' ? '首次模型' : '当前模型'}}</text>
+    </view>
+  </view>
+
+
+  <!-- ==================================================
+       T0 基本背景
+       ================================================== -->
+
+  <view
+    wx:if="{{background}}"
+    class="section-card background-section"
+  >
+    <view class="section-heading">
+      T0 基本背景
+    </view>
+
+    <view class="background-grid">
+
+      <view class="background-item">
+        <view class="background-label">
+          教龄
+        </view>
+        <view class="background-value">
+          {{background.teaching_years}} 年
+        </view>
+      </view>
+
+      <view class="background-item">
+        <view class="background-label">
+          最高学历
+        </view>
+        <view class="background-value">
+          {{background.highest_education || '未填写'}}
+        </view>
+      </view>
+
+      <view class="background-item">
+        <view class="background-label">
+          专业背景
+        </view>
+        <view class="background-value">
+          {{background.major_background || '未填写'}}
+        </view>
+      </view>
+
+      <view class="background-item">
+        <view class="background-label">
+          当前任教学科
+        </view>
+        <view class="background-value">
+          {{background.current_subject || '未填写'}}
+        </view>
+      </view>
+
+      <view class="background-item">
+        <view class="background-label">
+          当前任教年级
+        </view>
+        <view class="background-value">
+          {{background.current_grade || '未填写'}}
+        </view>
+      </view>
+
+    </view>
+  </view>
+
+
+  <!-- ==================================================
+       T1—T5
+       ================================================== -->
+
+  <view
+    wx:for="{{dimensions}}"
+    wx:key="dimension_id"
+    class="dimension-section"
+  >
+
+    <view class="dimension-title-row">
+      <view class="dimension-code">
+        {{item.dimension_id}}
+      </view>
+
+      <view class="dimension-name">
+        {{item.dimension_name}}
+      </view>
+    </view>
+
+
+    <!-- 每个二级建模变量 -->
+
+    <view
+      wx:for="{{item.variables}}"
+      wx:for-item="variable"
+      wx:key="variable_id"
+      class="variable-card"
+    >
+
+      <view class="variable-top">
+        <view class="variable-title-wrap">
+
+          <view class="variable-code">
+            {{variable.variable_id}}
+          </view>
+
+          <view class="variable-name">
+            {{variable.variable_name}}
+          </view>
+
+        </view>
+
+        <view
+          class="confidence-tag confidence-{{variable.confidence}}"
+        >
+          {{variable.confidence_text}}
+        </view>
+      </view>
+
+
+      <!-- 当前描述 -->
+
+      <view class="content-block">
+        <view class="content-label">
+          当前描述
+        </view>
+
+        <view class="current-state">
+          {{variable.current_state}}
+        </view>
+      </view>
+
+
+      <!-- 证据依据 -->
+
+      <view
+        wx:if="{{variable.evidence_count > 0}}"
+        class="content-block"
+      >
+        <view class="content-label">
+          证据依据
+        </view>
+
+        <view
+          wx:for="{{variable.evidence_basis}}"
+          wx:for-item="basis"
+          wx:key="analysis_id"
+          class="evidence-item"
+        >
+          <view class="evidence-dot">
+            ·
+          </view>
+
+          <view class="evidence-text">
+            {{basis.point}}
+          </view>
+        </view>
+      </view>
+
+
+      <!-- 适用情境 -->
+
+      <view
+        wx:if="{{variable.contexts && variable.contexts.length > 0}}"
+        class="content-block"
+      >
+        <view class="content-label">
+          适用情境
+        </view>
+
+        <view
+          wx:for="{{variable.contexts}}"
+          wx:key="*this"
+          class="simple-list-item"
+        >
+          {{item}}
+        </view>
+      </view>
+
+
+      <!-- 不确定性 -->
+
+      <view
+        wx:if="{{variable.uncertainty && variable.uncertainty.length > 0}}"
+        class="content-block uncertainty-block"
+      >
+        <view class="content-label">
+          当前限制
+        </view>
+
+        <view
+          wx:for="{{variable.uncertainty}}"
+          wx:key="*this"
+          class="simple-list-item"
+        >
+          {{item}}
+        </view>
+      </view>
+
+    </view>
+
+  </view>
+
+
+  <!-- ==================================================
+       模型说明
+       ================================================== -->
+
+  <view
+    wx:if="{{modelCautions.length > 0}}"
+    class="section-card caution-section"
+  >
+    <view class="section-heading">
+      模型说明
+    </view>
+
+    <view
+      wx:for="{{modelCautions}}"
+      wx:key="*this"
+      class="caution-item"
+    >
+      {{index + 1}}. {{item}}
+    </view>
+  </view>
+
+
+  <!-- 刷新 -->
+
+  <view
+    class="bottom-refresh"
+    bindtap="refreshModel"
+  >
+    刷新当前模型
+  </view>
+
+</block>
+
+</view>

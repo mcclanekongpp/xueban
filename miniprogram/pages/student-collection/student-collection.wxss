@@ -1,0 +1,22 @@
+page { background: #f5f8f6; }
+.page { min-height: 100vh; padding: 42rpx 32rpx 56rpx; box-sizing: border-box; }
+.state-card, .completion-card, .task-card, .answer-card { background: #fff; border-radius: 26rpx; padding: 34rpx; }
+.state-card { margin-top: 140rpx; text-align: center; color: #6f7872; }
+.progress { font-size: 24rpx; color: #6d8979; }
+.task-title { margin-top: 18rpx; font-size: 36rpx; font-weight: 600; color: #26342c; }
+.task-prompt { margin-top: 22rpx; font-size: 31rpx; line-height: 1.8; color: #39463e; }
+.answer-card { margin-top: 24rpx; background: #edf7f1; }
+.answer-label { font-size: 23rpx; color: #678071; }
+.answer-text { margin-top: 12rpx; font-size: 28rpx; line-height: 1.7; color: #314038; }
+.voice-area { display: flex; flex-direction: column; align-items: center; padding-top: 48rpx; }
+.voice-button { width: 220rpx; height: 220rpx; border-radius: 50%; background: #fff; box-shadow: 0 12rpx 38rpx rgba(40,80,55,.12); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.voice-button.recording { background: #e4f4ea; transform: scale(.98); }
+.voice-icon { font-size: 58rpx; }
+.voice-text { margin-top: 16rpx; font-size: 29rpx; color: #2e4738; }
+.voice-tip { margin-top: 22rpx; font-size: 24rpx; color: #7e8982; text-align: center; }
+.submit-button, .home-button { margin-top: 38rpx; border-radius: 18rpx; background: #e0e5e2; color: #929b96; }
+.submit-button.ready, .home-button { background: #2f8d5c; color: #fff; }
+.submit-button::after, .home-button::after { border: 0; }
+.completion-card { margin-top: 80rpx; text-align: center; }
+.completion-title { font-size: 36rpx; font-weight: 600; color: #28513a; }
+.completion-text { margin-top: 18rpx; font-size: 27rpx; line-height: 1.7; color: #617068; }

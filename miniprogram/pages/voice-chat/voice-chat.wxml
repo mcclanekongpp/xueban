@@ -1,0 +1,275 @@
+<!-- pages/voice-chat/voice-chat.wxml -->
+
+<view class="page">
+
+<!-- ================================================= -->
+<!-- 顶部 -->
+<!-- ================================================= -->
+
+<view class="header">
+
+  <text class="title">
+    {{
+      sessionType === 'initial_interview'
+        ? '首次交流'
+        : sessionType === 'teaching_reflection'
+          ? '教学反思'
+          : sessionType === 'student_observation'
+            ? '学生观察'
+            : '自由记录'
+    }}
+  </text>
+
+  <text class="subtitle">
+    {{
+      sessionType === 'initial_interview'
+        ? '按照自己的真实经历和想法回答即可'
+        : sessionType === 'teaching_reflection'
+          ? '记录刚刚发生的教学经历、判断和调整'
+          : sessionType === 'student_observation'
+            ? '记录你观察到的学生表现、反应和变化'
+            : '记录此刻你认为值得保留的教学想法或经历'
+    }}
+  </text>
+
+</view>
+
+
+<!-- ================================================= -->
+<!-- 首次预设采集 -->
+<!-- ================================================= -->
+
+<block wx:if="{{sessionType === 'initial_interview'}}">
+
+  <!-- 全部完成 -->
+  <view
+    wx:if="{{collectionCompleted}}"
+    class="completion-card"
+  >
+
+    <text class="completion-title">
+      首次交流已完成
+    </text>
+
+    <text class="completion-text">
+      谢谢你的分享。后续记录可以继续通过教学反思、学生观察和自由记录进行。
+    </text>
+
+  </view>
+
+
+  <!-- 当前任务 -->
+  <block wx:else>
+
+    <view
+      wx:if="{{currentTask}}"
+      class="task-card"
+    >
+
+      <view class="task-progress">
+        <text class="task-progress-text">
+          第 {{currentTask.task_order}} 项，共 13 项
+        </text>
+      </view>
+
+      <text class="task-title">
+        {{currentTask.title}}
+      </text>
+
+      <text class="task-prompt">
+        {{currentTask.prompt_text}}
+      </text>
+
+    </view>
+
+
+    <view class="conversation-area">
+
+      <!-- 教师刚才的回答 -->
+      <view
+        wx:if="{{lastTranscript}}"
+        class="message teacher-message"
+      >
+
+        <text class="message-label">
+          我的回答
+        </text>
+
+        <text class="message-text">
+          {{lastTranscript}}
+        </text>
+
+      </view>
+
+
+      <!-- 正在识别 -->
+      <view
+        wx:if="{{isTranscribing}}"
+        class="status-message"
+      >
+
+        <text class="status-text">
+          正在整理你刚才说的话…
+        </text>
+
+      </view>
+
+    </view>
+
+  </block>
+
+</block>
+
+
+<!-- ================================================= -->
+<!-- 持续记录 -->
+<!-- ================================================= -->
+
+<block wx:else>
+
+  <view class="conversation-area">
+
+    <!-- 不同记录类型的引导语 -->
+    <view class="message assistant-message">
+
+      <text class="message-text">
+        {{
+          sessionType === 'teaching_reflection'
+            ? '可以从刚才的一节课、一个教学片段或一次临时调整说起。发生了什么？你当时是怎么判断和处理的？'
+            : sessionType === 'student_observation'
+              ? '可以说说你最近观察到的一名学生或一类学生。具体发生了什么？学生有什么表现？'
+              : '可以说说今天课堂里、备课中或与学生相处时，最想记录下来的一件事。'
+        }}
+      </text>
+
+    </view>
+
+
+    <!-- 已识别的记录 -->
+    <view
+      wx:if="{{lastTranscript}}"
+      class="message teacher-message"
+    >
+
+      <text class="message-label">
+        我的记录
+      </text>
+
+      <text class="message-text">
+        {{lastTranscript}}
+      </text>
+
+    </view>
+
+
+    <!-- 正在识别 -->
+    <view
+      wx:if="{{isTranscribing}}"
+      class="status-message"
+    >
+
+      <text class="status-text">
+        正在整理你刚才说的话…
+      </text>
+
+    </view>
+
+  </view>
+
+</block>
+
+
+<!-- ================================================= -->
+<!-- 录音区域 -->
+<!-- ================================================= -->
+
+<view
+  wx:if="{{!collectionCompleted}}"
+  class="voice-area"
+>
+
+  <view
+    class="voice-button"
+    bindtouchstart="startRecording"
+    bindtouchend="stopRecording"
+    bindtouchcancel="stopRecording"
+  >
+
+    <text class="voice-icon">
+      🎙️
+    </text>
+
+    <text class="voice-text">
+      {{isRecording ? '正在聆听…' : '按住说话'}}
+    </text>
+
+  </view>
+
+
+  <text class="voice-tip">
+    {{
+      isRecording
+        ? '松开结束录音'
+        : isUploading
+          ? '正在保存录音'
+          : isTranscribing
+            ? '正在识别语音'
+            : '请尽量在安静环境中使用'
+    }}
+  </text>
+
+
+  <!-- ================================================= -->
+  <!-- 首次预设采集：完成本题 -->
+  <!-- ================================================= -->
+
+  <button
+    wx:if="{{sessionType === 'initial_interview'}}"
+    class="complete-button {{canCompleteTask ? 'complete-button-ready' : ''}}"
+    disabled="{{!canCompleteTask || isCompletingTask}}"
+    bindtap="completeCurrentTask"
+  >
+    {{
+      isCompletingTask
+        ? '正在提交…'
+        : '完成本题'
+    }}
+  </button>
+
+
+  <text
+    wx:if="{{sessionType === 'initial_interview' && lastTranscript}}"
+    class="answer-tip"
+  >
+    如果刚才没有说完整，可以再次录音补充；确认完成后再进入下一项。
+  </text>
+
+
+  <!-- ================================================= -->
+  <!-- 持续记录：完成本次记录 -->
+  <!-- ================================================= -->
+
+  <button
+    wx:if="{{sessionType !== 'initial_interview'}}"
+    class="complete-button {{lastTranscript ? 'complete-button-ready' : ''}}"
+    disabled="{{!lastTranscript || isCompletingTask}}"
+    bindtap="completeContinuousRecord"
+  >
+    {{
+      isCompletingTask
+        ? '正在提交…'
+        : '完成本次记录'
+    }}
+  </button>
+
+
+  <text
+    wx:if="{{sessionType !== 'initial_interview' && lastTranscript}}"
+    class="answer-tip"
+  >
+    如果还有需要补充的内容，可以继续录音；确认完整后完成本次记录。
+  </text>
+
+</view>
+
+</view>

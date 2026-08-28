@@ -1,0 +1,235 @@
+<view class="page">
+
+<!-- 加载中 -->
+<view
+  wx:if="{{isLoading}}"
+  class="loading-wrap"
+>
+  <text class="loading-text">
+    正在读取基本信息...
+  </text>
+</view>
+
+
+<!-- 表单 -->
+<view
+  wx:else
+  class="form-wrap"
+>
+
+  <view class="intro-card">
+    <view class="intro-title">
+      基本信息
+    </view>
+
+    <view class="intro-desc">
+      请填写与当前教学相关的基本背景信息。相关内容仅作为教师主体建模的背景资料，不用于能力评分。
+    </view>
+  </view>
+
+
+  <!-- 教龄 -->
+  <view class="form-item">
+    <view class="form-label">
+      教龄
+    </view>
+
+    <input
+      class="form-input"
+      type="number"
+      placeholder="请输入教龄，如 8"
+      value="{{teachingYears}}"
+      bindinput="onTeachingYearsInput"
+    />
+
+    <view class="form-tip">
+      填写实际从事教学工作的年数
+    </view>
+  </view>
+
+
+  <!-- 最高学历 -->
+  <view class="form-item">
+    <view class="form-label">
+      最高学历
+    </view>
+
+    <picker
+      mode="selector"
+      range="{{educationOptions}}"
+      value="{{educationIndex}}"
+      bindchange="onEducationChange"
+    >
+      <view
+        class="picker-value {{highestEducation ? '' : 'placeholder-text'}}"
+      >
+        {{highestEducation || '请选择最高学历'}}
+      </view>
+    </picker>
+  </view>
+
+
+  <!-- 专业背景 -->
+  <view class="form-item">
+    <view class="form-label">
+      专业背景
+    </view>
+
+    <input
+      class="form-input"
+      placeholder="如：小学教育、科学教育、物理学"
+      value="{{majorBackground}}"
+      bindinput="onMajorBackgroundInput"
+    />
+  </view>
+
+
+  <!-- 当前任教学科 -->
+  <view class="form-item">
+    <view class="form-label">
+      当前任教学科
+    </view>
+
+    <input
+      class="form-input"
+      placeholder="如：科学"
+      value="{{currentSubject}}"
+      bindinput="onCurrentSubjectInput"
+    />
+  </view>
+
+
+  <!-- 当前任教年级 -->
+  <view class="form-item">
+    <view class="form-label">
+      当前任教年级
+    </view>
+
+    <input
+      class="form-input"
+      placeholder="如：一年级"
+      value="{{currentGrade}}"
+      bindinput="onCurrentGradeInput"
+    />
+  </view>
+
+
+  <!-- 教过的年级 -->
+  <view class="section-title">
+    相关教学经历
+  </view>
+
+  <view class="form-item">
+    <view class="form-label">
+      曾任教年级
+    </view>
+
+    <input
+      class="form-input"
+      placeholder="如：一年级、二年级、三年级"
+      value="{{gradesTaughtText}}"
+      bindinput="onGradesTaughtInput"
+    />
+
+    <view class="form-tip">
+      多个年级可使用顿号或逗号分隔
+    </view>
+  </view>
+
+
+  <!-- 教过的学科 -->
+  <view class="form-item">
+    <view class="form-label">
+      曾任教学科
+    </view>
+
+    <input
+      class="form-input"
+      placeholder="如：科学、综合实践"
+      value="{{subjectsTaughtText}}"
+      bindinput="onSubjectsTaughtInput"
+    />
+
+    <view class="form-tip">
+      多个学科可使用顿号或逗号分隔
+    </view>
+  </view>
+
+
+  <!-- 低年级教学经历 -->
+  <view class="form-item switch-item">
+    <view class="switch-text">
+      <view class="form-label">
+        是否有低年级教学经历
+      </view>
+
+      <view class="form-tip">
+        指一年级、二年级等低年级教学经历
+      </view>
+    </view>
+
+    <switch
+      checked="{{lowerGradeExperience}}"
+      bindchange="onLowerGradeChange"
+    />
+  </view>
+
+
+  <!-- 补充教学经历 -->
+  <view class="form-item">
+    <view class="form-label">
+      教学经历补充
+    </view>
+
+    <textarea
+      class="form-textarea"
+      placeholder="可补充与当前教学有关的其他经历，没有可不填"
+      value="{{otherDescription}}"
+      bindinput="onOtherDescriptionInput"
+      maxlength="500"
+    />
+  </view>
+
+
+  <!-- 培训经历 -->
+  <view class="section-title">
+    相关培训经历
+  </view>
+
+  <view class="form-item">
+    <view class="form-label">
+      培训经历
+    </view>
+
+    <textarea
+      class="form-textarea training-textarea"
+      placeholder="如：小学科学课程培训&#10;低年级教学专题培训&#10;没有可不填"
+      value="{{trainingExperienceText}}"
+      bindinput="onTrainingExperienceInput"
+      maxlength="2000"
+    />
+
+    <view class="form-tip">
+      建议一行填写一项培训经历
+    </view>
+  </view>
+
+
+  <!-- 保存 -->
+  <button
+    class="save-button"
+    loading="{{isSaving}}"
+    disabled="{{isSaving}}"
+    bindtap="saveBackground"
+  >
+    {{hasBackground ? '保存修改' : '保存基本信息'}}
+  </button>
+
+
+  <view class="bottom-note">
+    基本信息仅用于理解教学背景，不直接作为教师能力或教学水平判断依据。
+  </view>
+
+</view>
+
+</view>

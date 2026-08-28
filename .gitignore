@@ -1,0 +1,25 @@
+# Windows
+[Dd]esktop.ini
+Thumbs.db
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+
+# Node.js
+node_modules/
+
+# WeChat DevTools local-only settings
+project.private.config.json
+
+# Local review credentials (contains one-time bind code / student number)
+docs/REVIEW_TEST.md
+
+# Local environment overrides and secrets
+.env
+.env.*
+!.env.example

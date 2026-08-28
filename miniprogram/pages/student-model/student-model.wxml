@@ -1,0 +1,32 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state-card">正在读取首次建模结果...</view>
+  <view wx:elif="{{!hasModel}}" class="state-card">{{errorMessage}}</view>
+
+  <block wx:else>
+    <view class="header-card">
+      <view class="header-title">{{pageTitle}}</view>
+      <view class="header-meta">版本 {{modelVersion}} · {{modelStatusName}}</view>
+      <view class="header-desc">{{pageDescription}}</view>
+    </view>
+
+    <view wx:for="{{dimensions}}" wx:key="dimension_id" class="dimension">
+      <view class="dimension-title">{{item.dimension_id}} {{item.dimension_name}}</view>
+      <view wx:for="{{item.variables}}" wx:for-item="variable" wx:key="variable_id" class="variable-card">
+        <view class="variable-top">
+          <view class="variable-name">{{variable.variable_id}} {{variable.variable_name}}</view>
+          <view class="status-tag">{{variable.current_status}}</view>
+        </view>
+        <view class="label">当前描述</view>
+        <view class="description">{{variable.current_description}}</view>
+        <view wx:if="{{variable.uncertainty && variable.uncertainty.length}}" class="uncertainty">
+          <view class="label">还不确定的地方</view>
+          <view wx:for="{{variable.uncertainty}}" wx:key="*this" class="uncertainty-item">· {{item}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="caution-card">
+      <view wx:for="{{cautions}}" wx:key="*this" class="caution-item">{{index + 1}}. {{item}}</view>
+    </view>
+  </block>
+</view>

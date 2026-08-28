@@ -1,0 +1,48 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state-card">正在准备...</view>
+
+  <block wx:else>
+    <view class="prompt-card">
+      <view class="title">再说一说</view>
+      <view class="prompt">最近在学习、观察、做事情或者和同学一起活动时，有没有什么事情想和我们说一说？</view>
+      <view class="help">遇到困难、新发现、改变想法，或者和别人一起完成一件事情，都可以说。</view>
+    </view>
+
+    <view wx:if="{{lastTranscript}}" class="answer-card">
+      <view class="answer-label">刚才说的是</view>
+      <view class="answer-text">{{lastTranscript}}</view>
+    </view>
+
+    <view class="voice-area">
+      <view
+        class="voice-button {{isRecording ? 'recording' : ''}}"
+        bindtouchstart="startRecording"
+        bindtouchend="stopRecording"
+        bindtouchcancel="stopRecording"
+      >
+        <view class="voice-icon">🎙️</view>
+        <view class="voice-text">{{isRecording ? '正在听你说' : '按住说话'}}</view>
+      </view>
+      <view class="voice-tip">
+        {{isRecording ? '松开结束' : isUploading ? '正在保存' : isTranscribing ? '正在整理' : '想到什么就说什么，没有标准答案'}}
+      </view>
+    </view>
+
+    <button
+      wx:if="{{asrFailed}}"
+      class="retry-button"
+      disabled="{{isTranscribing}}"
+      bindtap="retryTranscription"
+    >
+      再试一次识别
+    </button>
+
+    <button
+      class="submit-button {{canSubmit ? 'ready' : ''}}"
+      disabled="{{!canSubmit || isSubmitting}}"
+      bindtap="submitContinuous"
+    >
+      {{isSubmitting ? '正在提交...' : '提交这次分享'}}
+    </button>
+  </block>
+</view>

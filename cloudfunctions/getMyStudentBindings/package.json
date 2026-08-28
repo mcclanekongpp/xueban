@@ -1,0 +1,9 @@
+{
+  "name": "getMyStudentBindings",
+  "version": "1.0.0",
+  "description": "Return safe active Student Subject bindings for the current WeChat operator",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

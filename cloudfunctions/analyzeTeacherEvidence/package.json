@@ -1,0 +1,10 @@
+{
+  "name": "analyzeTeacherEvidence",
+  "version": "1.0.0",
+  "description": "教师原始证据分析云函数",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest",
+    "@cloudbase/node-sdk": "^3.18.3"
+  }
+}
