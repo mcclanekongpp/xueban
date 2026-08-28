@@ -12,7 +12,9 @@ Page({
     modelLoading: false,
     hasModel: false,
     modelStatus: '',
-    modelStatusText: ''
+    modelStatusText: '',
+    guidanceLoading: false,
+    guidanceItems: []
   },
 
   onShow() {
@@ -91,7 +93,10 @@ Page({
       })
 
       if (completed) {
-        await this.loadModelState(subjectId)
+        await Promise.all([
+          this.loadModelState(subjectId),
+          this.loadModelGuidance(subjectId)
+        ])
       }
     } catch (error) {
       console.error('读取 Student Home 失败：', error)
@@ -145,6 +150,33 @@ Page({
     }
   },
 
+  async loadModelGuidance(subjectId) {
+    this.setData({ guidanceLoading: true })
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getSubjectModelGuidance',
+        data: {
+          subject_id: subjectId,
+          subject_type: 'student',
+          limit: 3
+        }
+      })
+      const result = res && res.result ? res.result : null
+
+      this.setData({
+        guidanceLoading: false,
+        guidanceItems:
+          result && result.success === true && Array.isArray(result.guidance)
+            ? result.guidance
+            : []
+      })
+    } catch (error) {
+      console.error('读取学生后续分享建议失败：', error)
+      this.setData({ guidanceLoading: false, guidanceItems: [] })
+    }
+  },
+
   openModel() {
     const subjectId = this.data.student && this.data.student.subject_id
 
@@ -155,13 +187,19 @@ Page({
     })
   },
 
-  openContinuous() {
+  openContinuous(event) {
     const subjectId = this.data.student && this.data.student.subject_id
 
     if (!subjectId || !this.data.collectionCompleted) return
 
+    const prompt = event && event.currentTarget && event.currentTarget.dataset
+      ? String(event.currentTarget.dataset.prompt || '')
+      : ''
+
     wx.navigateTo({
-      url: `/pages/student-continuous/student-continuous?subject_id=${encodeURIComponent(subjectId)}`
+      url:
+        `/pages/student-continuous/student-continuous?subject_id=${encodeURIComponent(subjectId)}` +
+        (prompt ? `&guidance_prompt=${encodeURIComponent(prompt)}` : '')
     })
   }
 })

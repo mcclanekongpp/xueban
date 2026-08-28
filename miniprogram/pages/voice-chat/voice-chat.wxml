@@ -52,7 +52,7 @@
     </text>
 
     <text class="completion-text">
-      谢谢你的分享。后续记录可以继续通过教学反思、学生观察和自由记录进行。
+      谢谢你的分享。后续可以继续通过教学反思或学生观察补充真实经历。
     </text>
 
   </view>
@@ -139,13 +139,19 @@
     <!-- 不同记录类型的引导语 -->
     <view class="message assistant-message">
 
+      <text wx:if="{{guidanceName}}" class="message-label">
+        本次建议补充：{{guidanceName}}
+      </text>
+
       <text class="message-text">
         {{
-          sessionType === 'teaching_reflection'
-            ? '可以从刚才的一节课、一个教学片段或一次临时调整说起。发生了什么？你当时是怎么判断和处理的？'
-            : sessionType === 'student_observation'
-              ? '可以说说你最近观察到的一名学生或一类学生。具体发生了什么？学生有什么表现？'
-              : '可以说说今天课堂里、备课中或与学生相处时，最想记录下来的一件事。'
+          guidancePrompt
+            ? guidancePrompt
+            : sessionType === 'teaching_reflection'
+              ? '可以从刚才的一节课、一个教学片段或一次临时调整说起。发生了什么？你当时是怎么判断和处理的？'
+              : sessionType === 'student_observation'
+                ? '可以说说你最近观察到的一名学生或一类学生。具体发生了什么？学生有什么表现？'
+                : '可以说说今天课堂里、备课中或与学生相处时，最想记录下来的一件事。'
         }}
       </text>
 

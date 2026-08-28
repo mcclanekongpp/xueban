@@ -57,7 +57,7 @@
         </view>
 
         <view class="content-block">
-          <view class="content-label">当前描述</view>
+          <view class="content-label">当前主体刻画</view>
           <view class="current-state">{{variable.current_description}}</view>
         </view>
 

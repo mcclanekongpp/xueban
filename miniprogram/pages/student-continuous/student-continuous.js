@@ -1,5 +1,13 @@
 const recorderManager = wx.getRecorderManager()
 
+function decodeQueryValue(value) {
+  try {
+    return decodeURIComponent(String(value || ''))
+  } catch (error) {
+    return String(value || '')
+  }
+}
+
 Page({
   data: {
     subjectId: '',
@@ -12,7 +20,8 @@ Page({
     asrFailed: false,
     currentVoiceId: '',
     lastTranscript: '',
-    canSubmit: false
+    canSubmit: false,
+    guidancePrompt: ''
   },
 
   async onLoad(options) {
@@ -23,7 +32,10 @@ Page({
       ''
     ).trim()
 
-    this.setData({ subjectId })
+    this.setData({
+      subjectId,
+      guidancePrompt: decodeQueryValue(options && options.guidance_prompt)
+    })
     this.bindRecorderEvents()
     await this.prepareSession()
   },
@@ -231,6 +243,12 @@ Page({
 
       const evidence = Array.isArray(routed.evidence) ? routed.evidence : []
 
+      // 提示问题只负责开启对话；实际归类完全以语音转写内容的路由结果为准。
+      console.log('学生持续内容路由完成：', {
+        continuous_record_id: routed.continuous_record_id || '',
+        matched_count: evidence.length
+      })
+
       for (const item of evidence) {
         const analysisRes = await wx.cloud.callFunction({
           name: 'analyzeStudentEvidence',
@@ -250,7 +268,10 @@ Page({
         lastTranscript: '',
         asrFailed: false
       })
-      wx.showToast({ title: '谢谢你的分享', icon: 'success' })
+      wx.showToast({
+        title: evidence.length > 0 ? '分享已保存并整理' : '分享已安全保存',
+        icon: 'success'
+      })
       wx.navigateBack()
     } catch (error) {
       console.error('提交学生持续语音失败：', error)

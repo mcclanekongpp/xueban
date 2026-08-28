@@ -7,12 +7,16 @@
   <block wx:else>
     <view class="header">
       <view class="title">再说一说</view>
-      <view class="subtitle">想到什么就说什么，没有标准答案</view>
+      <view class="subtitle">说真实发生的事情就可以，没有标准答案</view>
     </view>
 
     <view class="prompt-card">
-      <view class="prompt">最近在学习、观察、做事情或者和同学一起活动时，有没有什么事情想和我们说一说？</view>
-      <view class="help">遇到困难、新发现、改变想法，或者和别人一起完成一件事情，都可以说。</view>
+      <view class="prompt">
+        {{guidancePrompt || '最近在学习、观察、做事情或者和同学一起活动时，有没有什么事情想和我们说一说？'}}
+      </view>
+      <view class="help">
+        {{guidancePrompt ? '可以说发生了什么、你当时怎么想、后来怎么做，也可以说别的真实经历。' : '遇到困难、新发现、改变想法，或者和别人一起完成一件事情，都可以说。'}}
+      </view>
     </view>
 
     <view wx:if="{{lastTranscript}}" class="answer-card">

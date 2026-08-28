@@ -3,6 +3,13 @@
 const recorderManager =
   wx.getRecorderManager()
 
+function decodeQueryValue(value) {
+  try {
+    return decodeURIComponent(String(value || ''))
+  } catch (error) {
+    return String(value || '')
+  }
+}
 
 Page({
 
@@ -43,11 +50,15 @@ Page({
     // initial_interview
     // teaching_reflection
     // student_observation
-    // free_dialogue
+    // free_dialogue（仅兼容历史链接，教师首页已不再提供该入口）
     // ==================================================
 
     sessionType:
-      'free_dialogue',
+      'teaching_reflection',
+
+    guidancePrompt: '',
+
+    guidanceName: '',
 
 
     // ==================================================
@@ -102,12 +113,18 @@ Page({
         options &&
         options.type
           ? options.type
-          : 'free_dialogue'
+          : 'teaching_reflection'
 
 
       this.setData({
         sessionType:
-          sessionType
+          sessionType,
+
+        guidancePrompt:
+          decodeQueryValue(options && options.guidance_prompt),
+
+        guidanceName:
+          decodeQueryValue(options && options.guidance_name)
       })
 
 

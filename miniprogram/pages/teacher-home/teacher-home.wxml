@@ -58,7 +58,7 @@
 
 <view
   wx:elif="{{collectionCompleted}}"
-  class="initial-card"
+  class="initial-card initial-card-completed"
 >
   <view class="initial-top-row">
 
@@ -77,7 +77,7 @@
   </view>
 
   <view class="initial-card-desc">
-    首次访谈资料已经完成采集，后续记录将继续用于丰富和更新教师主体模型。
+    首次访谈资料已保存，可继续补充真实教学经历。
   </view>
 </view>
 
@@ -178,27 +178,41 @@
   </view>
 
 
-  <!-- 自由记录 -->
+</view>
 
-  <view
-    class="record-card record-card-wide"
-    bindtap="startFreeRecord"
-  >
-    <view class="record-icon">
-      ＋
-    </view>
 
-    <view class="record-title">
-      自由记录
-    </view>
+<!-- ==================================================
+     后续模型完善建议
+     ================================================== -->
 
-    <view class="record-desc">
-      记录其他值得保留的教学信息
-    </view>
+<block wx:if="{{collectionCompleted}}">
+  <view class="section-title">
+    后续完善建议
   </view>
 
+  <view class="section-desc">
+    根据当前证据与模型状态，选择一个具体经历继续补充。新记录经分析和复核后再进入后续模型版本。
+  </view>
 
-</view>
+  <view wx:if="{{guidanceLoading}}" class="guidance-state">
+    正在分析下一步可以补充的内容…
+  </view>
+
+  <view
+    wx:for="{{guidanceItems}}"
+    wx:key="variable_id"
+    class="guidance-card"
+    data-item="{{item}}"
+    bindtap="openGuidanceConversation"
+  >
+    <view class="guidance-top">
+      <view class="guidance-variable">{{item.variable_name}}</view>
+      <view class="guidance-action">去补充 ›</view>
+    </view>
+    <view class="guidance-reason">{{item.reason_text}}</view>
+    <view class="guidance-prompt">{{item.prompt_text}}</view>
+  </view>
+</block>
 
 
 <!-- ==================================================

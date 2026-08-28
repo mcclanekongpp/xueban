@@ -5,9 +5,25 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，尚未提交审核或正式发布。`1.0.4` 已被替代，不再用于送审。
+真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，尚未提交审核或正式发布。当前本地已增加主体刻画综合与后续补充对话提醒，`1.0.5` 不包含这些改动，暂不应直接提交审核。
 
-当前最高优先级：**完成微信公众平台隐私保护指引核对、提交 `1.0.5` 审核并发布，然后组织真人教师和学生主体模型采集测试**。
+当前最高优先级：**完成本轮新代码真机回归并上传下一候选版，再进行微信公众平台隐私保护指引核对、审核与发布**。
+
+## 主体刻画与后续补充对话优化（2026-08-28）
+
+- [x] 定位 Student-M0 旧实现把 `extracted_points` 以分号拼接为 `current_description` 的根因
+- [x] `buildStudentInitialModel` 升级为 `student_initial_model_v1.1`：使用 hy3 对 supportive Evidence Analysis 做跨证据主体刻画，严格拒绝变量变化、转写式输出、复制分析点、分数/排名/诊断与固定标签
+- [x] `buildTeacherInitialModel` 升级为 `teacher_initial_model_v1.2`：要求综合教学情境、关注/理解、判断依据、行动/调整与适用边界，并增加静态输出校验
+- [x] 已有 active Teacher snapshot `MS_MT873ZQI_9PEUL` 与 TEST Student snapshot `MS_MTBMDOF7_0MNQU` 保持不可变；本轮未重建、覆盖或自动批准模型
+- [x] 新增只读 `getSubjectModelGuidance`，根据 Evidence / latest active Analysis / snapshot 的证据充分性、情境与时间覆盖动态返回 1—3 个后续补充方向
+- [x] 提醒只作为自然对话起点，不把入口类型绑定变量；教师继续走 continuous content routing，学生继续走 `analyzeStudentEvidence(action = route_continuous)` 的 0—5 变量内容路由
+- [x] Teacher Home 和 Student Home 的首次采集完成卡片已压缩；Student Home 增加儿童友好的“下次可以聊”提示
+- [x] 教师首页“自由记录”正式入口已删除，只保留“今日教学反思”和“学生观察记录”；底层 `free_dialogue` 仅作历史兼容
+- [x] `getSubjectModelGuidance` 已部署；真实教师只读返回 24 条 Evidence / 24 条 Analysis 的优先建议，TEST Student 返回 22 条 Evidence / 22 条 Analysis 的优先建议
+- [x] 提醒卡片到教师 `voice-chat`、学生 `student-continuous` 的导航和提示透传已在开发者工具验证；后台实际路由不接收提示变量
+- [x] 59 个 JavaScript 文件通过 `node --check`，项目 JSON 解析通过，6 个相关 WXML 与 2 个相关 WXSS 编译通过，Simulator Console 无 error
+- [ ] 本轮小程序页面改动尚未上传新的开发版本
+- [ ] 改进后的模型综合协议需在新的真实主体完成首次采集后，以 draft → Human Review 验证输出质量；不得用旧 active snapshot 做静默覆盖测试
 
 ## 真人试采候选版本 1.0.5（2026-08-28）
 
@@ -16,7 +32,7 @@
 - [x] `student-home` 按教师首页的卡片层级整理首次采集、首次建模结果与“再说一说”，继续使用家庭/儿童可理解的文案
 - [x] 教师首页删除与自由记录重复的“语音记录”入口，底层 Voice / ASR 能力保持不变
 - [x] 教师首页删除尚未开发的“我的记录”入口；Teacher Record Center 记为非阻断 TODO
-- [x] 教师持续采集保留今日教学反思、学生观察记录、自由记录三个已实现入口
+- [x] 当时教师持续采集保留今日教学反思、学生观察记录、自由记录三个已实现入口；本轮后续优化已从正式首页删除自由记录，仅保留底层历史兼容
 - [x] 教师身份确认后复用 `T_MT78AZ2K_WINH7` 并进入 teacher-home；13/13 与 active snapshot `MS_MT873ZQI_9PEUL` 未改变
 - [x] Student Binding、17/17、active snapshot `MS_MTBMDOF7_0MNQU`、student-model 与 student-continuous 回归通过
 - [x] 57 个 JS 文件通过 `node --check`，91 个 JSON 文件解析通过，相关 WXML / WXSS 及微信开发者工具完整编译通过
@@ -175,7 +191,7 @@ TEST active snapshot：`MS_MTBMDOF7_0MNQU`，version = 1.0。该快照只用于�
 - [x] teacher-home 当前模型入口
 
 ## 三、已完成：教师持续记录
-入口：teaching_reflection、student_observation、free_dialogue。
+正式首页入口：teaching_reflection、student_observation。`free_dialogue` 只作历史记录与旧链接兼容，不再作为产品入口。
 
 - [x] 一次录音 = 一次提交
 - [x] source_type 不硬绑定变量
@@ -224,7 +240,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 ## 六、当前第一优先级
 
-先完成微信公众平台隐私保护指引核对、提交 `1.0.5` 审核与发布，再组织真人教师和学生主体模型采集测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id；Evidence Profile 等增强机制不作为当前优先项。
+先完成本轮本地页面的真机回归并上传下一候选版，再进行微信公众平台隐私保护指引核对、审核与发布，随后组织真人教师和学生主体模型采集测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id；完整 Evidence Profile / Evidence Gap 状态机仍不作为当前优先项。
 
 ## 七、学生端状态
 

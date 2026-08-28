@@ -95,6 +95,24 @@ page {
     box-sizing: border-box;
     overflow: hidden;
   }
+
+  .initial-card-completed {
+    padding: 22rpx 26rpx;
+  }
+
+  .initial-card-completed .initial-top-row {
+    margin-bottom: 12rpx;
+  }
+
+  .initial-card-completed .initial-card-title {
+    font-size: 30rpx;
+  }
+
+  .initial-card-completed .initial-card-desc {
+    margin-top: 8rpx;
+    font-size: 24rpx;
+    line-height: 1.55;
+  }
   
   .initial-top-row {
     display: flex;
@@ -238,11 +256,6 @@ page {
     box-sizing: border-box;
   }
 
-  .record-card-wide {
-    width: 100%;
-    min-height: 176rpx;
-  }
-  
   .record-icon {
     font-size: 34rpx;
     line-height: 1.2;
@@ -264,6 +277,60 @@ page {
     font-size: 23rpx;
     line-height: 1.55;
     color: #858b95;
+  }
+
+  .guidance-state,
+  .guidance-card {
+    margin-bottom: 16rpx;
+    padding: 24rpx 26rpx;
+    border-radius: 22rpx;
+    background: #ffffff;
+    box-sizing: border-box;
+  }
+
+  .guidance-state {
+    font-size: 24rpx;
+    line-height: 1.6;
+    color: #858b95;
+  }
+
+  .guidance-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .guidance-variable {
+    flex: 1;
+    min-width: 0;
+    font-size: 27rpx;
+    line-height: 1.45;
+    font-weight: 600;
+    color: #25282e;
+  }
+
+  .guidance-action {
+    margin-left: 20rpx;
+    flex-shrink: 0;
+    font-size: 24rpx;
+    color: #2f7de1;
+  }
+
+  .guidance-reason {
+    margin-top: 10rpx;
+    font-size: 23rpx;
+    line-height: 1.6;
+    color: #7d838d;
+  }
+
+  .guidance-prompt {
+    margin-top: 14rpx;
+    padding: 16rpx 18rpx;
+    border-radius: 16rpx;
+    background: #f5f8fc;
+    font-size: 25rpx;
+    line-height: 1.65;
+    color: #36516f;
   }
   
   

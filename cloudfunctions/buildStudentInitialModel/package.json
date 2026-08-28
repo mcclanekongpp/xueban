@@ -1,1 +1,9 @@
-{"name":"buildStudentInitialModel","version":"1.0.0","main":"index.js","dependencies":{"wx-server-sdk":"~2.6.3"}}
+{
+  "name": "buildStudentInitialModel",
+  "version": "1.1.0",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "@cloudbase/node-sdk": "^3.18.3"
+  }
+}

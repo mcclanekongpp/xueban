@@ -28,16 +28,20 @@
       </view>
     </view>
 
-    <view wx:if="{{progress}}" class="initial-card" bindtap="openCollection">
+    <view
+      wx:if="{{progress}}"
+      class="initial-card {{collectionCompleted ? 'initial-card-completed' : ''}}"
+      bindtap="openCollection"
+    >
       <view class="initial-top-row">
         <view class="initial-tag">{{collectionStatusText}}</view>
         <view class="initial-progress">{{progress.completed_tasks}} / {{progress.total_tasks}}</view>
       </view>
       <view class="initial-title">{{collectionCompleted ? '首次采集已完成' : '首次采集'}}</view>
       <view class="initial-desc">
-        {{collectionCompleted ? '谢谢你的认真分享，本次首次采集内容已经保存。' : '按照自己的真实经历和想法回答即可，没有标准答案。'}}
+        {{collectionCompleted ? '谢谢你的认真分享，首次采集内容已保存。' : '按照自己的真实经历和想法回答即可，没有标准答案。'}}
       </view>
-      <view class="progress-track">
+      <view wx:if="{{!collectionCompleted}}" class="progress-track">
         <view class="progress-fill" style="width: {{progressPercent}}%;"></view>
       </view>
       <view wx:if="{{!collectionCompleted}}" class="initial-action">
@@ -55,11 +59,30 @@
       <view wx:if="{{hasModel}}" class="card-arrow">›</view>
     </view>
 
+    <block wx:if="{{collectionCompleted}}">
+      <view class="section-title">下次可以聊</view>
+      <view class="section-desc">这些问题来自当前采集和分析中仍需要补充的地方。可以选一个，也可以自由分享别的经历。</view>
+
+      <view wx:if="{{guidanceLoading}}" class="guidance-state">正在想下一次可以聊什么…</view>
+
+      <view
+        wx:for="{{guidanceItems}}"
+        wx:key="variable_id"
+        class="guidance-card"
+        data-prompt="{{item.prompt_text}}"
+        bindtap="openContinuous"
+      >
+        <view class="guidance-kicker">可以聊聊</view>
+        <view class="guidance-prompt">{{item.prompt_text}}</view>
+        <view class="guidance-action">从这个问题开始 ›</view>
+      </view>
+    </block>
+
     <view wx:if="{{collectionCompleted}}" class="section-title">继续参与</view>
     <view wx:if="{{collectionCompleted}}" class="action-card" bindtap="openContinuous">
       <view class="action-content">
         <view class="action-title">再说一说</view>
-        <view class="action-desc">有新的发现、想法或经历时，随时可以再分享一段。</view>
+        <view class="action-desc">也可以不选提示，直接分享新的发现、想法或经历。</view>
       </view>
       <view class="card-arrow">›</view>
     </view>

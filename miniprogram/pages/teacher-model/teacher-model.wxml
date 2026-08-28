@@ -189,11 +189,11 @@
       </view>
 
 
-      <!-- 当前描述 -->
+      <!-- 当前主体刻画 -->
 
       <view class="content-block">
         <view class="content-label">
-          当前描述
+          当前主体刻画
         </view>
 
         <view class="current-state">

@@ -13,7 +13,11 @@ Page({
 
     currentTaskTitle: '',
 
-    currentTaskId: ''
+    currentTaskId: '',
+
+    guidanceLoading: false,
+
+    guidanceItems: []
   },
 
 
@@ -110,6 +114,8 @@ Page({
           currentTaskId:
             ''
         })
+
+        await this.loadModelGuidance()
 
         return
       }
@@ -269,14 +275,53 @@ Page({
 
 
   // ==================================================
-  // 自由记录
+  // 后续完善建议
+  // 提示只决定对话起点，后台仍按实际内容独立路由变量。
   // ==================================================
 
-  startFreeRecord() {
+  async loadModelGuidance() {
+    this.setData({ guidanceLoading: true })
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getSubjectModelGuidance',
+        data: {
+          subject_type: 'teacher',
+          limit: 3
+        }
+      })
+      const result = res && res.result ? res.result : null
+
+      this.setData({
+        guidanceLoading: false,
+        guidanceItems:
+          result && result.success === true && Array.isArray(result.guidance)
+            ? result.guidance
+            : []
+      })
+    } catch (error) {
+      console.error('读取教师后续完善建议失败：', error)
+      this.setData({ guidanceLoading: false, guidanceItems: [] })
+    }
+  },
+
+  openGuidanceConversation(event) {
+    const item = event && event.currentTarget && event.currentTarget.dataset
+      ? event.currentTarget.dataset.item
+      : null
+
+    if (!item || !item.prompt_text) return
+
+    const sessionType = item.entry_type === 'student_observation'
+      ? 'student_observation'
+      : 'teaching_reflection'
+
     wx.navigateTo({
       url:
         '/pages/voice-chat/voice-chat' +
-        '?type=free_dialogue'
+        `?type=${encodeURIComponent(sessionType)}` +
+        `&guidance_prompt=${encodeURIComponent(item.prompt_text)}` +
+        `&guidance_name=${encodeURIComponent(item.variable_name || '')}`
     })
   },
 

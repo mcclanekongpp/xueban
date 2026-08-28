@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Student_ID 不直接使用 OpenID。
 
-真人试采候选版 `1.0.4` 未新增集合。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis；教师正式持续路由使用 `analyzeTeacherEvidence(action = route_continuous)`，学生正式持续路由使用 `analyzeStudentEvidence(action = route_continuous)`。发布前权限回归已确认全部研究内部集合拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段、采集状态和 Student-M0 安全摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash`、`bind_code_hash` 或其他 Student 数据。真人 Student Model 构建只写 draft，active 状态仅由 researcher / admin 受控审核产生。
+最近一次已上传开发版为 `1.0.5`。本轮主体刻画综合与后续补充提醒未新增集合：Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis；`getSubjectModelGuidance` 只读这些记录和 model_snapshots，不保存提醒结果。教师正式持续路由使用 `analyzeTeacherEvidence(action = route_continuous)`，学生正式持续路由使用 `analyzeStudentEvidence(action = route_continuous)`。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段、采集状态和 Student-M0 安全摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash`、`bind_code_hash` 或其他 Student 数据。真人 Student Model 构建只写 draft，active 状态仅由 researcher / admin 受控审核产生。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -65,7 +65,7 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 学生关键字段：progress_id、subject_id、subject_type、framework、collection_phase、total_tasks、completed_tasks、completed_count、completed_task_ids[]、current_task_id、current_order、status、started_at、completed_at、created_at、updated_at。status：not_started / in_progress / completed。同一 Student Subject 不重复初始化进度。
 
 ## 13. sessions
-一次采集会话。当前支持 Teacher / Student `initial_interview`，教师 `teaching_reflection`、`student_observation`、`free_dialogue`，以及学生 `student_continuous_record`。学生首次会话字段包括 subject_id、subject_type = student、framework = student_v1.0、collection_phase = initial、session_type = initial_interview、task_id、operator_user_id、status 与时间字段。学生持续会话固定 `collection_phase = continuous`、`session_type = student_continuous_record`。创建任一学生会话前必须验证当前 user 对 Student_ID 的 active guardian binding。
+一次采集会话。当前支持 Teacher / Student `initial_interview`，教师正式入口 `teaching_reflection`、`student_observation`，以及学生 `student_continuous_record`；`free_dialogue` 只作为历史兼容 session_type 保留在底层。学生首次会话字段包括 subject_id、subject_type = student、framework = student_v1.0、collection_phase = initial、session_type = initial_interview、task_id、operator_user_id、status 与时间字段。学生持续会话固定 `collection_phase = continuous`、`session_type = student_continuous_record`。创建任一学生会话前必须验证当前 user 对 Student_ID 的 active guardian binding。
 
 ## 14. messages
 保存会话文本与 ASR 转写。属于原始记录层，不是 Evidence。
@@ -114,11 +114,13 @@ Evidence Analysis 不直接生成主体模型结论。
 
 当前 TEST Student snapshot：`MS_MTBMDOF7_0MNQU`，status = active，framework = student_v1.0，model_type / snapshot_type = initial，version / model_version = 1.0，`is_test = true`。
 
-学生首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、status、is_test、approved_at、approved_by_user_id、created_at、updated_at。`model_data` 固定含 S1—S6 与 17 个变量，每变量保存 current_status、current_description、evidence_ids、evidence_count、evidence_summary、contexts、uncertainty、updated_at；不保存总分、排名或固定人格类型。
+学生首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、model_provider、model_name、status、is_test、approved_at、approved_by_user_id、created_at、updated_at。`model_data` 固定含 S1—S6 与 17 个变量，每变量保存 current_status、current_description、evidence_ids、evidence_count、evidence_summary、contexts、uncertainty、updated_at；不保存总分、排名或固定人格类型。新 Student 初始 draft 使用 `generation_method = ai_evidence_synthesis`、`generation_protocol = student_initial_model_v1.1`；教师新初始 draft 使用 `teacher_initial_model_v1.2`。协议均禁止把转写或 extracted_points 直接拼接为主体刻画。
 
 后续模型变化必须创建新 snapshot，不修改旧版本。
 
 Student Continuous Collection V1.0 不写 model_snapshots，不更新 active Student-M0，也不改变 subjects.current_version / current_snapshot_id。
+
+`getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示；提示结果不属于模型事实，实际新语音仍需内容路由、Evidence Analysis 和后续人工复核。
 
 ## 19. variable_evidence_profiles
 状态：设计和云函数代码已保留；截至 2026-08-27，当前 `model-dev-d9gkoyaolb464c28d` 数据面未实际存在该集合。机制当前暂停，不阻断教师 / 学生首次模型 MVP 时不继续处理。
