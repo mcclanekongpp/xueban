@@ -367,6 +367,52 @@ function validateGeneratedVariables(
     )
   }
 
+  const topLevelKeys =
+    Object.keys(generated)
+
+  if (
+    topLevelKeys.some(
+      key =>
+        ![
+          'overview_summary',
+          'variables'
+        ].includes(key)
+    )
+  ) {
+    throw new Error(
+      'MODEL_TOP_LEVEL_FIELD_INVALID'
+    )
+  }
+
+  const overviewSummary =
+    typeof generated.overview_summary === 'string'
+      ? generated.overview_summary.trim()
+      : ''
+
+  const overviewLabels = [
+    '目标取向',
+    '学生理解',
+    '教学策略',
+    '互动关系',
+    '专业反思'
+  ]
+
+  if (
+    !overviewSummary ||
+    overviewSummary.length > 100 ||
+    overviewLabels.some(
+      label =>
+        !overviewSummary.includes(label)
+    ) ||
+    /(能力强|能力弱|优秀|较差|高水平|低水平|人格类型|心理诊断|排名|总分)/.test(
+      overviewSummary
+    )
+  ) {
+    throw new Error(
+      'MODEL_OVERVIEW_SUMMARY_INVALID'
+    )
+  }
+
   if (
     generated.variables.length !==
     ALL_VARIABLES.length
@@ -664,7 +710,13 @@ function validateGeneratedVariables(
   }
 
 
-  return resultMap
+  return {
+    variables:
+      resultMap,
+
+    overviewSummary:
+      overviewSummary
+  }
 }
 
 
@@ -1793,6 +1845,7 @@ exports.main =
 只输出严格 JSON，不要 Markdown，不要解释文字。
 
 {
+  "overview_summary": "目标取向：……；学生理解：……；教学策略：……；互动关系：……；专业反思：……。",
   "variables": [
     {
       "variable_id": "T1-1",
@@ -1814,6 +1867,8 @@ exports.main =
     }
   ]
 }
+
+overview_summary 必须在100个汉字以内，必须依次覆盖“目标取向、学生理解、教学策略、互动关系、专业反思”五个方面。每个方面只概括当前证据支持的模式；证据不足时写“待补充”，不得为了完整而推断。
 
 必须完整输出13个变量，顺序必须为：
 T1-1、T1-2、
@@ -1854,11 +1909,14 @@ ${JSON.stringify(aiInput)}
     // 17. 严格验证 AI 输出
     // ==================================================
 
-    const generatedMap =
+    const generatedResult =
       validateGeneratedVariables(
         generated,
         evidencePackets
       )
+
+    const generatedMap =
+      generatedResult.variables
 
 
     // ==================================================
@@ -1947,6 +2005,9 @@ ${JSON.stringify(aiInput)}
 
       subject_id:
         subjectId,
+
+      overview_summary:
+        generatedResult.overviewSummary,
 
       background,
 
@@ -2045,7 +2106,7 @@ ${JSON.stringify(aiInput)}
         'ai_evidence_synthesis',
 
       generation_protocol:
-        'teacher_initial_model_v1.2',
+        'teacher_initial_model_v1.3',
 
       model_provider:
         'cloudbase',

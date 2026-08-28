@@ -29,6 +29,48 @@
       </view>
     </view>
 
+    <view class="overview-card">
+      <view class="overview-heading">当前模型概览</view>
+      <view class="overview-text">{{overviewSummary}}</view>
+    </view>
+
+    <view class="progress-card">
+      <view class="progress-card-top">
+        <view>
+          <view class="progress-heading">模型构建进展</view>
+          <view class="progress-subtitle">各维度证据覆盖与持续积累情况</view>
+        </view>
+        <view class="progress-total">
+          {{constructionProgressLoading ? '—' : constructionProgressPercent}}%
+        </view>
+      </view>
+
+      <canvas
+        wx:if="{{constructionProgressDimensions.length >= 3}}"
+        type="2d"
+        id="studentProgressRadar"
+        class="radar-canvas"
+      ></canvas>
+
+      <view
+        wx:for="{{constructionProgressDimensions}}"
+        wx:key="dimension_id"
+        class="progress-row"
+      >
+        <view class="progress-row-label">{{item.dimension_id}} {{item.display_name}}</view>
+        <view class="progress-row-track">
+          <view class="progress-row-fill" style="width: {{item.progress_percent}}%;"></view>
+        </view>
+        <view class="progress-row-value">{{item.progress_percent}}%</view>
+      </view>
+
+      <view class="progress-note">
+        {{constructionProgressLoading ? '正在读取构建进度…' : constructionProgressNote}}
+      </view>
+    </view>
+
+    <view class="details-heading">具体模型信息</view>
+
     <view
       wx:for="{{dimensions}}"
       wx:key="dimension_id"

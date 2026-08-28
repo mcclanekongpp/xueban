@@ -40,6 +40,20 @@ const STUDENT_VARIABLES = [
   ['S6', '兴趣、活动经验与生活情境', 'S6-3', '家庭学习支持情境', '最近遇到不会的事情时，你先做了什么？家里人怎样和你一起想办法？']
 ]
 
+const DIMENSION_SHORT_NAMES = {
+  T1: '目标取向',
+  T2: '学生理解',
+  T3: '教学策略',
+  T4: '互动关系',
+  T5: '专业反思',
+  S1: '认知经验',
+  S2: '思维解题',
+  S3: '自我调节',
+  S4: '表达互动',
+  S5: '动机情绪',
+  S6: '兴趣情境'
+}
+
 function toVariableObjects(subjectType) {
   const source = subjectType === 'teacher' ? TEACHER_VARIABLES : STUDENT_VARIABLES
   return source.map((item) => ({
@@ -182,6 +196,103 @@ function buildGuidanceItem(subjectType, variable, pairs, modelVariable) {
   }
 }
 
+// 构建进度只描述模型证据底座的覆盖和持续积累，不评价主体水平。
+// supportive 仍使用正式 Evidence Analysis 门槛；进度计算绝不改变
+// relevance / sufficiency / confidence 或模型采纳规则。
+function buildVariableProgress(variable, evidence, pairs) {
+  const supportive = pairs.filter(({ analysis }) => isSupportive(analysis))
+  const contexts = unique(supportive.map(({ analysis }) => analysis.context))
+  const dates = unique(supportive.map(({ evidence: item }) => cstDate(item.created_at)))
+  const sourceTypes = unique(supportive.map(({ evidence: item }) => item.source_type))
+
+  const components = {
+    collected: evidence.length > 0 ? 20 : 0,
+    analyzed: pairs.length > 0 ? 20 : 0,
+    supportive_foundation: supportive.length > 0 ? 30 : 0,
+    repeated_support: supportive.length >= 2 ? 15 : 0,
+    cross_time: dates.length >= 2 ? 10 : 0,
+    context_or_source_breadth: contexts.length >= 2 || sourceTypes.length >= 2 ? 5 : 0
+  }
+  const progressPercent = Object.values(components).reduce((sum, value) => sum + value, 0)
+
+  return {
+    dimension_id: variable.dimension_id,
+    dimension_name: variable.dimension_name,
+    variable_id: variable.variable_id,
+    variable_name: variable.variable_name,
+    progress_percent: progressPercent,
+    evidence_count: evidence.length,
+    analyzed_evidence_count: pairs.length,
+    supportive_evidence_count: supportive.length,
+    time_point_count: dates.length,
+    context_count: contexts.length,
+    source_type_count: sourceTypes.length,
+    components
+  }
+}
+
+function progressBand(percent) {
+  if (percent >= 90) return '覆盖较充分'
+  if (percent >= 70) return '已有基础'
+  if (percent >= 40) return '正在补充'
+  if (percent > 0) return '刚开始'
+  return '待采集'
+}
+
+function buildConstructionProgress(variables, evidenceByVariable, pairsByVariable) {
+  const variableProgress = variables.map((variable) => buildVariableProgress(
+    variable,
+    evidenceByVariable.get(variable.variable_id) || [],
+    pairsByVariable.get(variable.variable_id) || []
+  ))
+  const dimensionOrder = unique(variables.map((item) => item.dimension_id))
+  const dimensions = dimensionOrder.map((dimensionId) => {
+    const items = variableProgress.filter((item) => item.dimension_id === dimensionId)
+    const percent = items.length > 0
+      ? Math.round(items.reduce((sum, item) => sum + item.progress_percent, 0) / items.length)
+      : 0
+
+    return {
+      dimension_id: dimensionId,
+      dimension_name: items[0] ? items[0].dimension_name : '',
+      display_name: DIMENSION_SHORT_NAMES[dimensionId] || dimensionId,
+      progress_percent: percent,
+      variable_count: items.length,
+      collected_variable_count: items.filter((item) => item.evidence_count > 0).length,
+      supportive_variable_count: items.filter((item) => item.supportive_evidence_count > 0).length
+    }
+  })
+  const overallPercent = variableProgress.length > 0
+    ? Math.round(variableProgress.reduce((sum, item) => sum + item.progress_percent, 0) / variableProgress.length)
+    : 0
+  const summaryText = dimensions
+    .map((item) => `${item.display_name}${progressBand(item.progress_percent)}`)
+    .join('；') + '。'
+
+  return {
+    index_name: '模型构建进度',
+    index_version: '1.0',
+    is_quality_score: false,
+    overall_percent: overallPercent,
+    variable_count: variableProgress.length,
+    collected_variable_count: variableProgress.filter((item) => item.evidence_count > 0).length,
+    analyzed_variable_count: variableProgress.filter((item) => item.analyzed_evidence_count > 0).length,
+    supportive_variable_count: variableProgress.filter((item) => item.supportive_evidence_count > 0).length,
+    dimensions,
+    variables: variableProgress,
+    summary_text: summaryText,
+    formula: {
+      collected: 20,
+      analyzed: 20,
+      supportive_foundation: 30,
+      repeated_support: 15,
+      cross_time: 10,
+      context_or_source_breadth: 5
+    },
+    note: '仅表示证据覆盖与持续积累进度，不代表能力、水平、质量或模型结论置信度。'
+  }
+}
+
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
   const requestedType = event.subject_type === 'student' ? 'student' : 'teacher'
@@ -281,8 +392,11 @@ exports.main = async (event = {}) => {
       }
     }
 
+    const evidenceByVariable = new Map()
     const pairsByVariable = new Map()
     for (const item of evidence) {
+      if (!evidenceByVariable.has(item.variable_id)) evidenceByVariable.set(item.variable_id, [])
+      evidenceByVariable.get(item.variable_id).push(item)
       const analysis = analysisByEvidence.get(item.evidence_id)
       if (!analysis || !isConsistent(analysis, item, subjectId, framework)) continue
       if (!pairsByVariable.has(item.variable_id)) pairsByVariable.set(item.variable_id, [])
@@ -301,6 +415,11 @@ exports.main = async (event = {}) => {
 
     const requestedLimit = Number(event.limit || 3)
     const limit = Math.max(1, Math.min(3, Number.isFinite(requestedLimit) ? requestedLimit : 3))
+    const constructionProgress = buildConstructionProgress(
+      variables,
+      evidenceByVariable,
+      pairsByVariable
+    )
 
     return {
       success: true,
@@ -313,6 +432,7 @@ exports.main = async (event = {}) => {
       snapshot_id: snapshot ? snapshot.snapshot_id : '',
       evidence_count: evidence.length,
       analyzed_evidence_count: [...analysisByEvidence.keys()].length,
+      construction_progress: constructionProgress,
       guidance: items.slice(0, limit),
       message: '后续采集建议已根据当前证据与模型状态生成'
     }

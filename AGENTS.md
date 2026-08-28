@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。2026-08-28 本地进一步完成主体刻画综合协议与后续补充对话提醒：模型生成不再允许把转写或 extracted_points 直接拼接为模型描述，Teacher / Student Home 可根据当前 Evidence、Evidence Analysis 与 snapshot 状态给出 1—3 个补充提示；提醒只作为对话起点，实际变量仍按内容路由。教师首页持续入口现只保留“今日教学反思”和“学生观察记录”。小程序开发版 `1.0.5` 是最近一次已上传版本，但不含本轮本地改动，暂不应直接提交审核；完成新代码真机回归并上传下一候选版后，再进行平台隐私核对、审核与发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。2026-08-28 本地进一步完成主体刻画综合协议、后续补充对话提醒与模型构建进度展示：模型生成不再允许把转写或 extracted_points 直接拼接为模型描述；Teacher / Student Home 可根据当前 Evidence、Evidence Analysis 与 snapshot 状态给出 1—3 个补充提示；模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示。构建进度只表达固定框架的证据覆盖与持续积累，不评价能力、水平或模型质量，也不改变正式 Evidence Analysis 与模型采纳门槛。教师首页持续入口现只保留“今日教学反思”和“学生观察记录”。小程序开发版 `1.0.5` 是最近一次已上传版本，但不含本轮本地改动，暂不应直接提交审核；完成新代码真机回归并上传下一候选版后，再进行平台隐私核对、审核与发布。
 
 ## 五阶段路线
 1. 主体表征
@@ -82,6 +82,8 @@
 
 模型中的“当前主体刻画”不是 ASR 转写摘要或 Evidence Analysis 要点列表。生成层必须综合有证据支持的情境、关注/理解、判断依据、行动/调整、结果与适用边界；若证据只支持行为，不得反推深层信念。具体原始例子留在 Evidence / evidence_basis，模型描述负责跨证据提炼。任何新综合结果先形成 draft，经人工复核后才能成为 active；不得静默改写已审批 snapshot。
 
+模型构建进度不是测评得分。V1.0 以固定 13 / 17 个变量为分母，只计算每个变量是否已有 active Evidence、有效 Analysis、supportive Evidence、重复支持、跨日和跨情境/来源覆盖，再汇总为一级维度与总体百分比。supportive 的正式定义和模型采纳门槛保持不变；不得为了提高百分比把 irrelevant / uncertain / insufficient 数据计入支持，也不得降低 confidence 或 Human Review 要求。
+
 ## 证据基本原则
 1. 原始记录与模型结论分离。
 2. Evidence 与 Evidence Analysis 分离。
@@ -143,7 +145,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 每题独立执行 Session → Voice → ASR → Message → Evidence → Evidence Analysis → Progress，允许中途退出后从下一未完成任务继续。
 - 学生原始记录、Evidence、Evidence Analysis 与 Model Snapshot 的 `subject_id` 均为 Student_ID；Guardian user 只记录为 `operator_user_id`，不得作为被建模主体。
 - Student Evidence Analysis V1.0 使用 `relevance_status`、`evidence_sufficiency`、`extracted_points`、`reasoning_basis`、`context`、`uncertainty`，不做心理诊断、排名、总分或固定人格判断。
-- `buildStudentInitialModel` 使用 `student_initial_model_v1.1` 对全部 supportive Evidence Analysis 做 AI 证据综合，生成包含 S1—S6、17 变量的 draft Student-M0；禁止直接拼接 extracted_points，不足变量仍保留，不自动变为 active。
+- `buildStudentInitialModel` 使用 `student_initial_model_v1.2` 对全部 supportive Evidence Analysis 做 AI 证据综合，生成包含 S1—S6、17 变量的 draft Student-M0；禁止直接拼接 extracted_points，不足变量仍保留，不自动变为 active。新 draft 另含 100 字以内、覆盖 S1—S6 的 `overview_summary`，不使用分数、排名或诊断表达。
 - `approveStudentInitialModel` 完成受控人工确认。`getStudentCurrentModel` 只向 active Guardian 或 researcher / admin 返回安全摘要；Student Home 在 17/17 后提供“查看首次建模结果”，`student-model` 显示 draft / active 状态及 S1—S6、17 变量的当前描述和不确定性，不返回原始 Evidence、内部 reasoning、分数、排名或诊断。
 - TEST Student 已完成 1 条真机录音/ASR 与 16 条明确 `is_test=true` 的模拟技术记录，验证 17/17、draft、人工审批、active 与当前模型展示全链路。
 
@@ -163,7 +165,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - Teacher 初始模型生成与人工批准保持分离，真人采集入口不得调用自动批准捷径。
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
-- 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一版本、状态、一级维度、二级变量、当前描述和可选不确定性层级，同时保留儿童端自然语言。
+- 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
 - 版本 `1.0.5` 是最近一次已上传开发版本；本轮主体刻画与补充提醒改动尚未上传，因此 `1.0.5` 暂不提交审核。下一候选版上传后，微信公众平台隐私保护指引确认、提交审核和发布仍需管理员完成。
 
 ## 数据与隐私原则
@@ -190,7 +192,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 3. Student Initial Model MVP：S0 → 17 项首次采集 → Voice / ASR → Evidence / Analysis → Draft → Human Review → Active → Current Model（已完成）
 4. Student Continuous Collection V1.0（已完成）
 5. 真人试采候选版本 `1.0.5` 上传（已完成，已被本地新改动超越）
-6. 主体刻画综合协议与后续补充对话提醒（本地与云函数完成，待新候选版真机回归/上传）
+6. 主体刻画综合协议、后续补充对话提醒与模型构建进度（本地与云函数完成，待新候选版真机回归/上传）
 7. 微信平台隐私核对、审核与发布
 8. 组织真人教师和学生主体模型采集测试
 9. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务

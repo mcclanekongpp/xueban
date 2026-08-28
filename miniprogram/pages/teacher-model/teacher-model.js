@@ -1,3 +1,7 @@
+const {
+  drawModelProgressRadar
+} = require('../../utils/model-progress-radar')
+
 function normalizeTextList(value) {
   const values = Array.isArray(value) ? value : [value]
   const emptyValues = ['none', 'null', 'undefined', '无', '暂无', '目前无', '无不确定性']
@@ -17,6 +21,11 @@ function formatDate(value) {
 
   const pad = number => String(number).padStart(2, '0')
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
+}
+
+function limitSummary(value, fallback) {
+  const text = String(value || fallback || '').trim()
+  return text.length <= 100 ? text : `${text.slice(0, 99)}…`
 }
 
 Page({
@@ -44,7 +53,17 @@ Page({
 
     dimensions: [],
 
-    modelCautions: []
+    modelCautions: [],
+
+    overviewSummary: '',
+
+    constructionProgressLoading: false,
+
+    constructionProgressPercent: 0,
+
+    constructionProgressDimensions: [],
+
+    constructionProgressNote: ''
   },
 
 
@@ -258,6 +277,8 @@ Page({
             : []
       })
 
+      await this.loadConstructionProgress(model)
+
     } catch (error) {
       console.error(
         'loadCurrentModel error:',
@@ -273,6 +294,66 @@ Page({
         errorMessage:
           error.message ||
           '读取教师主体模型失败'
+      })
+    }
+  },
+
+
+  // ==================================================
+  // 模型构建进度
+  // 只描述证据覆盖与持续积累，不改变置信度或采纳门槛。
+  // ==================================================
+
+  async loadConstructionProgress(model) {
+    const fallbackSummary =
+      '目标取向、学生理解、教学策略、互动关系与专业反思均已纳入当前模型，具体覆盖程度见下方构建进展。'
+
+    this.setData({
+      constructionProgressLoading: true,
+      overviewSummary: limitSummary(model && model.overview_summary, fallbackSummary)
+    })
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getSubjectModelGuidance',
+        data: {
+          subject_type: 'teacher',
+          limit: 1
+        }
+      })
+      const result = res && res.result ? res.result : null
+      const progress = result && result.success === true
+        ? result.construction_progress
+        : null
+
+      if (!progress || !Array.isArray(progress.dimensions)) {
+        throw new Error('教师模型构建进度返回无效')
+      }
+
+      const overviewSummary = model && model.overview_summary
+        ? model.overview_summary
+        : progress.summary_text
+
+      this.setData({
+        constructionProgressLoading: false,
+        overviewSummary: limitSummary(overviewSummary, fallbackSummary),
+        constructionProgressPercent: Number(progress.overall_percent || 0),
+        constructionProgressDimensions: progress.dimensions,
+        constructionProgressNote: progress.note || ''
+      })
+
+      drawModelProgressRadar(
+        this,
+        '#teacherProgressRadar',
+        progress.dimensions
+      )
+    } catch (error) {
+      console.error('读取教师模型构建进度失败：', error)
+      this.setData({
+        constructionProgressLoading: false,
+        constructionProgressPercent: 0,
+        constructionProgressDimensions: [],
+        constructionProgressNote: '构建进度暂未读取，不影响当前模型内容。'
       })
     }
   },

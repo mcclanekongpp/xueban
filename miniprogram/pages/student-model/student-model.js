@@ -1,3 +1,7 @@
+const {
+  drawModelProgressRadar
+} = require('../../utils/model-progress-radar')
+
 function normalizeTextList(value) {
   const values = Array.isArray(value) ? value : [value]
   const emptyValues = ['none', 'null', 'undefined', '无', '暂无', '目前无', '无不确定性']
@@ -30,6 +34,11 @@ function formatDate(value) {
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
 }
 
+function limitSummary(value, fallback) {
+  const text = String(value || fallback || '').trim()
+  return text.length <= 100 ? text : `${text.slice(0, 99)}…`
+}
+
 Page({
   data: {
     subjectId: '',
@@ -44,7 +53,12 @@ Page({
     pageTitle: '首次建模结果',
     pageDescription: '',
     dimensions: [],
-    cautions: []
+    cautions: [],
+    overviewSummary: '',
+    constructionProgressLoading: false,
+    constructionProgressPercent: 0,
+    constructionProgressDimensions: [],
+    constructionProgressNote: ''
   },
 
   onLoad(options) {
@@ -105,9 +119,66 @@ Page({
         dimensions,
         cautions: Array.isArray(result.model.model_cautions) ? result.model.model_cautions : []
       })
+
+      await this.loadConstructionProgress(subjectId, result.model)
     } catch (error) {
       console.error('读取 Student-M0 失败：', error)
       this.setData({ loading: false, hasModel: false, errorMessage: '读取 Student-M0 失败' })
+    }
+  },
+
+  async loadConstructionProgress(subjectId, model) {
+    const fallbackSummary =
+      '认知经验、思维解题、自我调节、表达互动、动机情绪与兴趣情境均已纳入当前模型，具体覆盖程度见下方构建进展。'
+
+    this.setData({
+      constructionProgressLoading: true,
+      overviewSummary: limitSummary(model && model.overview_summary, fallbackSummary)
+    })
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getSubjectModelGuidance',
+        data: {
+          subject_id: subjectId,
+          subject_type: 'student',
+          limit: 1
+        }
+      })
+      const result = res && res.result ? res.result : null
+      const progress = result && result.success === true
+        ? result.construction_progress
+        : null
+
+      if (!progress || !Array.isArray(progress.dimensions)) {
+        throw new Error('学生模型构建进度返回无效')
+      }
+
+      const overviewSummary = model && model.overview_summary
+        ? model.overview_summary
+        : progress.summary_text
+
+      this.setData({
+        constructionProgressLoading: false,
+        overviewSummary: limitSummary(overviewSummary, fallbackSummary),
+        constructionProgressPercent: Number(progress.overall_percent || 0),
+        constructionProgressDimensions: progress.dimensions,
+        constructionProgressNote: progress.note || ''
+      })
+
+      drawModelProgressRadar(
+        this,
+        '#studentProgressRadar',
+        progress.dimensions
+      )
+    } catch (error) {
+      console.error('读取学生模型构建进度失败：', error)
+      this.setData({
+        constructionProgressLoading: false,
+        constructionProgressPercent: 0,
+        constructionProgressDimensions: [],
+        constructionProgressNote: '构建进度暂未读取，不影响当前模型内容。'
+      })
     }
   },
 

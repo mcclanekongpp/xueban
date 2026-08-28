@@ -73,6 +73,22 @@ function validateGeneratedModel(generated, evidenceByVariable) {
     throw new Error('STUDENT_MODEL_VARIABLE_COUNT_INVALID')
   }
 
+  if (Object.keys(generated).some((key) => !['overview_summary', 'variables'].includes(key))) {
+    throw new Error('STUDENT_MODEL_TOP_LEVEL_FIELD_INVALID')
+  }
+
+  const overviewSummary = String(generated.overview_summary || '').trim()
+  const overviewLabels = ['认知经验', '思维解题', '自我调节', '表达互动', '动机情绪', '兴趣情境']
+
+  if (
+    !overviewSummary ||
+    overviewSummary.length > 100 ||
+    overviewLabels.some((label) => !overviewSummary.includes(label)) ||
+    /(能力强|能力弱|优秀|较差|人格类型|心理诊断|智力水平|排名|总分)/.test(overviewSummary)
+  ) {
+    throw new Error('STUDENT_MODEL_OVERVIEW_SUMMARY_INVALID')
+  }
+
   const allowedKeys = ['variable_id', 'variable_name', 'current_description', 'contexts', 'uncertainty']
   const forbiddenLanguage = /(能力强|能力弱|优秀|较差|人格类型|心理诊断|智力水平|排名|总分)/
   const result = new Map()
@@ -126,7 +142,7 @@ function validateGeneratedModel(generated, evidenceByVariable) {
   }
 
   if (result.size !== VARIABLES.length) throw new Error('STUDENT_MODEL_VARIABLES_INCOMPLETE')
-  return result
+  return { variables: result, overviewSummary }
 }
 
 async function synthesizeStudentModel(evidenceByVariable) {
@@ -175,6 +191,7 @@ async function synthesizeStudentModel(evidenceByVariable) {
 
 只输出严格 JSON，不要 Markdown 或解释：
 {
+  "overview_summary": "认知经验：……；思维解题：……；自我调节：……；表达互动：……；动机情绪：……；兴趣情境：……。",
   "variables": [
     {
       "variable_id": "S1-1",
@@ -185,6 +202,8 @@ async function synthesizeStudentModel(evidenceByVariable) {
     }
   ]
 }
+
+overview_summary 必须在100个汉字以内，必须依次覆盖“认知经验、思维解题、自我调节、表达互动、动机情绪、兴趣情境”六个方面。每个方面只概括当前证据支持的模式；证据不足时写“待补充”，不得为了完整而推断。
 
 必须完整输出17个变量，顺序为：
 S1-1、S1-2、S1-3、S2-1、S2-2、S2-3、S3-1、S3-2、S3-3、S4-1、S4-2、S4-3、S5-1、S5-2、S6-1、S6-2、S6-3。
@@ -395,7 +414,7 @@ exports.main = async (event = {}) => {
       variables: dimension.variables.map((variable) => {
         const pairs = evidenceByVariable.get(variable.variable_id) || []
         const supportive = pairs.filter(({ analysis }) => isSupportive(analysis))
-        const generated = synthesis.generated.get(variable.variable_id)
+        const generated = synthesis.generated.variables.get(variable.variable_id)
         const contexts = generated.contexts
         const uncertainty = uniqueStrings(generated.uncertainty.concat(
           supportive.length > 0 ? ['当前仍需通过后续真实活动和跨时间证据继续验证。'] : []
@@ -433,6 +452,7 @@ exports.main = async (event = {}) => {
       framework: 'student_v1.0',
       model_version: '1.0',
       subject_id: subjectId,
+      overview_summary: synthesis.generated.overviewSummary,
       background: backgroundResult.data[0],
       dimensions,
       model_cautions: [
@@ -460,7 +480,7 @@ exports.main = async (event = {}) => {
       source_analysis_ids: supportivePairs.map(({ analysis }) => analysis.analysis_id),
       source_evidence_count: supportivePairs.length,
       generation_method: 'ai_evidence_synthesis',
-      generation_protocol: 'student_initial_model_v1.1',
+      generation_protocol: 'student_initial_model_v1.2',
       model_provider: 'cloudbase',
       model_name: 'hy3',
       status: 'draft',

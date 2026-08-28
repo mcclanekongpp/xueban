@@ -5,15 +5,28 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，尚未提交审核或正式发布。当前本地已增加主体刻画综合与后续补充对话提醒，`1.0.5` 不包含这些改动，暂不应直接提交审核。
+真人试采候选版 `1.0.5` 已上传为微信小程序开发版本，尚未提交审核或正式发布。当前本地已增加主体刻画综合、后续补充对话提醒与模型构建进度展示，`1.0.5` 不包含这些改动，暂不应直接提交审核。
 
 当前最高优先级：**完成本轮新代码真机回归并上传下一候选版，再进行微信公众平台隐私保护指引核对、审核与发布**。
+
+## 模型构建进度与总体概览（2026-08-28）
+
+- [x] `getSubjectModelGuidance` 新增只读 `construction_progress`：以教师 13 个、学生 17 个固定变量为完整分母，返回总体、一级维度和二级变量构建进度
+- [x] 变量进度 V1.0 固定为 active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%
+- [x] supportive 门槛保持 `relevant / partially_relevant + usable / weak`；irrelevant、uncertain、insufficient 不增加支持覆盖，进度不改变 confidence、模型采纳或人工审核规则
+- [x] Teacher / Student 模型页已按“100 字内总体概览 → 一级维度雷达图与百分比 → 具体变量信息”统一展示，并明确标注该指数不是能力、水平、质量或置信度评分
+- [x] `buildTeacherInitialModel` 升级为 `teacher_initial_model_v1.3`，`buildStudentInitialModel` 升级为 `student_initial_model_v1.2`；新 draft 必须生成覆盖固定一级维度、100 字以内且无评价性语言的 `model_data.overview_summary`
+- [x] 已有 active Teacher / TEST Student snapshot 保持不可变；旧 snapshot 页面使用只读构建状态摘要兼容，不回写或重建历史模型
+- [x] `getSubjectModelGuidance`、`buildTeacherInitialModel`、`buildStudentInitialModel`、`getStudentCurrentModel` 已部署到 `model-dev-d9gkoyaolb464c28d`；未调用模型构建函数
+- [x] 真实教师只读结果：总体 74%，T1—T5 = 70 / 60 / 97 / 60 / 85；TEST Student 只读结果：总体 77%，S1—S6 = 70 / 80 / 70 / 80 / 85 / 80
+- [x] 60 个 JavaScript 文件通过 `node --check`，95 个 JSON 文件解析通过；Teacher / Student 模型 WXML、WXSS 编译与模拟器页面核验通过，Console 无 error / warning
+- [ ] 本轮小程序页面改动尚未上传新的开发版本
 
 ## 主体刻画与后续补充对话优化（2026-08-28）
 
 - [x] 定位 Student-M0 旧实现把 `extracted_points` 以分号拼接为 `current_description` 的根因
-- [x] `buildStudentInitialModel` 升级为 `student_initial_model_v1.1`：使用 hy3 对 supportive Evidence Analysis 做跨证据主体刻画，严格拒绝变量变化、转写式输出、复制分析点、分数/排名/诊断与固定标签
-- [x] `buildTeacherInitialModel` 升级为 `teacher_initial_model_v1.2`：要求综合教学情境、关注/理解、判断依据、行动/调整与适用边界，并增加静态输出校验
+- [x] `buildStudentInitialModel` 先升级为 `student_initial_model_v1.1` 完成跨证据主体刻画，随后由本轮升级为 `student_initial_model_v1.2` 增加总体概览
+- [x] `buildTeacherInitialModel` 先升级为 `teacher_initial_model_v1.2` 完成跨证据主体刻画，随后由本轮升级为 `teacher_initial_model_v1.3` 增加总体概览
 - [x] 已有 active Teacher snapshot `MS_MT873ZQI_9PEUL` 与 TEST Student snapshot `MS_MTBMDOF7_0MNQU` 保持不可变；本轮未重建、覆盖或自动批准模型
 - [x] 新增只读 `getSubjectModelGuidance`，根据 Evidence / latest active Analysis / snapshot 的证据充分性、情境与时间覆盖动态返回 1—3 个后续补充方向
 - [x] 提醒只作为自然对话起点，不把入口类型绑定变量；教师继续走 continuous content routing，学生继续走 `analyzeStudentEvidence(action = route_continuous)` 的 0—5 变量内容路由

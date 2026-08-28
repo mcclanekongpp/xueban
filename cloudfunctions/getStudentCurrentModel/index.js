@@ -21,6 +21,7 @@ function sanitizeModel(modelData) {
     : []
 
   return {
+    overview_summary: String(modelData && modelData.overview_summary || '').trim().slice(0, 100),
     dimensions: dimensions.map((dimension) => ({
       dimension_id: String(dimension.dimension_id || '').trim(),
       dimension_name: String(dimension.dimension_name || '').trim(),

@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Student_ID 不直接使用 OpenID。
 
-最近一次已上传开发版为 `1.0.5`。本轮主体刻画综合与后续补充提醒未新增集合：Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis；`getSubjectModelGuidance` 只读这些记录和 model_snapshots，不保存提醒结果。教师正式持续路由使用 `analyzeTeacherEvidence(action = route_continuous)`，学生正式持续路由使用 `analyzeStudentEvidence(action = route_continuous)`。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段、采集状态和 Student-M0 安全摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash`、`bind_code_hash` 或其他 Student 数据。真人 Student Model 构建只写 draft，active 状态仅由 researcher / admin 受控审核产生。
+最近一次已上传开发版为 `1.0.5`。本轮主体刻画综合、后续补充提醒与模型构建进度未新增集合：Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis；`getSubjectModelGuidance` 只读这些记录和 model_snapshots，不保存提醒或进度结果。教师正式持续路由使用 `analyzeTeacherEvidence(action = route_continuous)`，学生正式持续路由使用 `analyzeStudentEvidence(action = route_continuous)`。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段、采集状态和 Student-M0 安全摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash`、`bind_code_hash` 或其他 Student 数据。真人 Student Model 构建只写 draft，active 状态仅由 researcher / admin 受控审核产生。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -114,13 +114,15 @@ Evidence Analysis 不直接生成主体模型结论。
 
 当前 TEST Student snapshot：`MS_MTBMDOF7_0MNQU`，status = active，framework = student_v1.0，model_type / snapshot_type = initial，version / model_version = 1.0，`is_test = true`。
 
-学生首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、model_provider、model_name、status、is_test、approved_at、approved_by_user_id、created_at、updated_at。`model_data` 固定含 S1—S6 与 17 个变量，每变量保存 current_status、current_description、evidence_ids、evidence_count、evidence_summary、contexts、uncertainty、updated_at；不保存总分、排名或固定人格类型。新 Student 初始 draft 使用 `generation_method = ai_evidence_synthesis`、`generation_protocol = student_initial_model_v1.1`；教师新初始 draft 使用 `teacher_initial_model_v1.2`。协议均禁止把转写或 extracted_points 直接拼接为主体刻画。
+学生首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、model_provider、model_name、status、is_test、approved_at、approved_by_user_id、created_at、updated_at。`model_data` 固定含 `overview_summary`、S1—S6 与 17 个变量，每变量保存 current_status、current_description、evidence_ids、evidence_count、evidence_summary、contexts、uncertainty、updated_at；不保存总分、排名或固定人格类型。新 Student 初始 draft 使用 `generation_method = ai_evidence_synthesis`、`generation_protocol = student_initial_model_v1.2`；教师新初始 draft 使用 `teacher_initial_model_v1.3`。`overview_summary` 不超过 100 字，必须覆盖各自全部一级维度且不得使用能力、水平、分数、排名或诊断表达；协议均禁止把转写或 extracted_points 直接拼接为主体刻画。
 
 后续模型变化必须创建新 snapshot，不修改旧版本。
 
 Student Continuous Collection V1.0 不写 model_snapshots，不更新 active Student-M0，也不改变 subjects.current_version / current_snapshot_id。
 
-`getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示；提示结果不属于模型事实，实际新语音仍需内容路由、Evidence Analysis 和后续人工复核。
+`getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示和 `construction_progress`；提示和进度结果不属于模型事实，实际新语音仍需内容路由、Evidence Analysis 和后续人工复核。
+
+`construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度或人工审批门槛。
 
 ## 19. variable_evidence_profiles
 状态：设计和云函数代码已保留；截至 2026-08-27，当前 `model-dev-d9gkoyaolb464c28d` 数据面未实际存在该集合。机制当前暂停，不阻断教师 / 学生首次模型 MVP 时不继续处理。
