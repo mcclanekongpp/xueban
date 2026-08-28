@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/role-select/role-select",
+    "pages/teacher-bind/teacher-bind",
     "pages/teacher-home/teacher-home",
     "pages/voice-chat/voice-chat",
     "pages/teacher-background/teacher-background",

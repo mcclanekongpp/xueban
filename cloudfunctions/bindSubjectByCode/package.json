@@ -1,0 +1,9 @@
+{
+  "name": "bindSubjectByCode",
+  "version": "1.0.0",
+  "description": "Bind a Teacher or Student Subject using the shared offline-code protocol",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "registerTeacherForStudy",
+  "version": "1.0.0",
+  "description": "Register an offline-consented teacher subject and issue a one-time binding code",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

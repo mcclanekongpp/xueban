@@ -1,0 +1,9 @@
+{
+  "name": "getMySubjectBindings",
+  "version": "1.0.0",
+  "description": "Return the current WeChat user's safe Teacher or Student Subject bindings",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

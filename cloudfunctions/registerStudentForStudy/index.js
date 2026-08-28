@@ -294,6 +294,7 @@ exports.main = async (event = {}) => {
       bind_id: bindId,
       bind_code_hash: bindCodeHash,
       subject_id: subjectId,
+      subject_type: 'student',
       school_id: schoolId,
       class_id: classId,
       student_no_hash: hashedStudentNo,

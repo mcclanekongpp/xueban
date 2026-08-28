@@ -10,6 +10,9 @@ App({
     // 当前教师/学生主体
     currentSubject: null,
 
+    // 当前微信绑定的教师主体关系
+    currentTeacherBinding: null,
+
     // 当前采集终端已选择的学生主体，不覆盖教师主体
     currentStudentBinding: null
   },
@@ -72,10 +75,12 @@ App({
 
       // 教师身份
       if (role === "teacher") {
-        await this.ensureTeacherSubject();
+        const subject = await this.ensureTeacherSubject();
 
         wx.reLaunch({
-          url: "/pages/teacher-home/teacher-home"
+          url: subject
+            ? "/pages/teacher-home/teacher-home"
+            : "/pages/teacher-bind/teacher-bind"
         });
         return;
       }
@@ -101,8 +106,8 @@ App({
   openBoundStudentHome: async function () {
     try {
       const res = await wx.cloud.callFunction({
-        name: "getMyStudentBindings",
-        data: {}
+        name: "getMySubjectBindings",
+        data: { subject_type: "student" }
       });
 
       const result = res && res.result ? res.result : null;
@@ -138,18 +143,10 @@ App({
 
       if (res.result && res.result.success) {
         this.globalData.currentSubject = res.result.subject;
-
-        if (res.result.is_new_subject) {
-          console.log(
-            "已创建新的教师主体：",
-            res.result.subject.subject_id
-          );
-        } else {
-          console.log(
-            "已有教师主体：",
-            res.result.subject.subject_id
-          );
-        }
+        console.log(
+          "已有教师主体：",
+          res.result.subject.subject_id
+        );
 
         return res.result.subject;
       }

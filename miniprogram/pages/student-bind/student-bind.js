@@ -13,8 +13,8 @@ Page({
   async checkExistingBinding() {
     try {
       const res = await wx.cloud.callFunction({
-        name: 'getMyStudentBindings',
-        data: {}
+        name: 'getMySubjectBindings',
+        data: { subject_type: 'student' }
       })
       const result = res && res.result ? res.result : null
       const bindings =
@@ -62,10 +62,11 @@ Page({
 
     try {
       const res = await wx.cloud.callFunction({
-        name: 'bindStudentByCode',
+        name: 'bindSubjectByCode',
         data: {
+          subject_type: 'student',
           bind_code: bindCode,
-          student_no: studentNo
+          subject_no: studentNo
         }
       })
       const result = res && res.result ? res.result : null
@@ -88,7 +89,7 @@ Page({
       wx.showToast({ title: '绑定成功', icon: 'success' })
       wx.redirectTo({ url: '/pages/student-home/student-home' })
     } catch (error) {
-      console.error('bindStudentByCode 调用失败：', error)
+      console.error('bindSubjectByCode 学生绑定失败：', error)
       wx.showToast({
         title: '绑定失败，请重试',
         icon: 'none'

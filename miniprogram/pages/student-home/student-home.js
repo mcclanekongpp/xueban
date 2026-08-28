@@ -26,8 +26,8 @@ Page({
 
     try {
       const res = await wx.cloud.callFunction({
-        name: 'getMyStudentBindings',
-        data: {}
+        name: 'getMySubjectBindings',
+        data: { subject_type: 'student' }
       })
       const result = res && res.result ? res.result : null
       const bindings =

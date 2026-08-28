@@ -13,6 +13,7 @@ const ALLOWED_COLLECTIONS = new Set([
   'schools',
   'classes',
   'class_memberships',
+  'teacher_bind_codes',
   'student_bind_codes',
   'guardian_student_bindings'
 ])
@@ -44,13 +45,16 @@ exports.main = async (event = {}) => {
   }
 
   if (
-    event.confirmation !== 'STUDENT_BINDING_MVP_ADMINONLY' ||
+    ![
+      'STUDENT_BINDING_MVP_ADMINONLY',
+      'SUBJECT_BINDING_MVP_ADMINONLY'
+    ].includes(event.confirmation) ||
     !ALLOWED_COLLECTIONS.has(collectionName)
   ) {
     return {
       success: false,
       code: 'INVALID_CONFIGURATION_REQUEST',
-      message: '配置请求不在 Student Binding 集合白名单内'
+      message: '配置请求不在 Subject Binding 集合白名单内'
     }
   }
 

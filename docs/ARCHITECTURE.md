@@ -2,11 +2,11 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。最近一次已上传开发版为 `1.0.5`；本地与相关云函数已新增主体刻画综合协议、后续补充对话提醒和非评价性的模型构建进度，尚需完成新候选版真机回归与上传，之后再进行微信平台隐私核对、审核与发布。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。最近一次已上传开发版为 `1.0.5`；本地已进一步形成 Teacher / Student 统一绑定协议，教师不再由角色选择自动创建 Subject。该绑定改动仍待云端结构确认、函数部署和双端回归，完成后再进入新候选版上传、微信平台隐私核对、审核与发布。
 
 Evidence Profile、Evidence Gap、Targeted Supplement、Stagnation、Unmatched 聚类、Model Change Candidate 和自动版本更新继续保留在总体架构中，但当前暂停深入开发；除非它们阻断首次模型构建，不进入近期实现范围。学生第一版以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
-## 0.1 Student Binding MVP 身份与组织架构
+## 0.1 Teacher / Student Subject Binding V1.0
 
 知情同意在线下以纸质方式完成。小程序不保存电子知情同意，也不把输入绑定码解释为知情同意。
 
@@ -14,35 +14,37 @@ Evidence Profile、Evidence Gap、Targeted Supplement、Stagnation、Unmatched �
 School
   ↓
 Class
-  ├─ Teacher Subject
+  ├─ Teacher Subject (Teacher_ID, teacher_v1.0)
+  │       ↑ bind code + school-scoped teacher_no
+  │       ↑ 教师本人微信
   └─ Student Subject (Student_ID, student_v1.0)
-          ↑
-线下预生成 bind code + 学校范围 student_no
-          ↑ 双重哈希校验
-Guardian WeChat User（仅采集终端操作者）
+          ↑ bind code + school-scoped student_no
+          ↑ 学生家长微信（仅采集终端操作者）
 ```
 
-组织关系由 `schools`、`classes`、`class_memberships` 表达。教师和学生仍统一存放在 `subjects`，不建立 teacher_student_direct_relation。
+组织关系由 `schools`、`classes`、`class_memberships` 表达。School_ID / Class_ID 是线下研究组织编码，不是可以登录或绑定微信的主体。教师和学生仍统一存放在 `subjects`，不建立 teacher_student_direct_relation。
 
 ```text
-registerStudentForStudy（研究团队受控调用）
-  → 创建独立 Student Subject
-  → 建立 student class_membership
+registerTeacherForStudy / registerStudentForStudy（研究团队受控调用）
+  → 创建独立 Teacher / Student Subject
+  → 建立 teacher / student class_membership
   → 随机生成一次性 bind code
-  → 只保存 bind_code_hash + school-scoped student_no_hash
+  → 只保存 bind_code_hash + school-scoped subject_no_hash
 
-bindStudentByCode（当前微信用户）
+bindSubjectByCode（当前微信用户）
   → 云端通过 OPENID 解析 users.user_id
-  → bind code + student_no 双重匹配
-  → 事务创建 guardian_student_binding 并把 code 置为 used
+  → 根据 subject_type 选择 teacher / student code 空间
+  → bind code + teacher_no / student_no 双重匹配
+  → 校验 Subject、framework、School / Class membership
+  → 事务创建 binding 并把 code 置为 used
 
-getMyStudentBindings
-  → 仅返回当前用户 active bindings 与 Student Home 安全字段
+getMySubjectBindings
+  → 仅返回当前用户指定 subject_type 的 active bindings 与安全组织字段
 ```
 
-绑定不会修改 `users.role`。后续学生 Voice、Message、Evidence、Evidence Analysis 与 Model Snapshot 一律归属 Student_ID，而不是 Guardian OpenID / user_id。
+教师绑定写入增强后的 `identity_map`，成功后才将当前 `users.role` 设为 teacher，以兼容既有教师云函数；`ensureTeacherSubject` 只读映射，不再创建主体。既有教师 identity_map 继续兼容。学生绑定仍写 `guardian_student_bindings` 且不修改 `users.role`。后续学生 Voice、Message、Evidence、Evidence Analysis 与 Model Snapshot 一律归属 Student_ID，而不是 Guardian OpenID / user_id。
 
-五个 Student Binding 集合均设置为 ADMINONLY，普通小程序端不可直接读写。
+绑定码明文只在受控预登记调用成功时返回一次，数据库只保存哈希。`teacher_bind_codes` / `student_bind_codes` 状态统一为 unused / used / revoked；错误编号不会消耗 code，同一用户重复提交同一已绑定 Subject 幂等成功，一个 Subject 不允许被不同微信重复绑定。所有绑定相关集合必须保持 ADMINONLY，普通小程序端只能通过云函数访问。
 
 ## 0.2 Student Initial Model MVP
 

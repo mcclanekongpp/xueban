@@ -9,6 +9,21 @@
 
 当前最高优先级：**完成本轮新代码真机回归并上传下一候选版，再进行微信公众平台隐私保护指引核对、审核与发布**。
 
+## Teacher / Student 统一绑定协议（2026-08-28）
+
+- [x] 完成兼容设计：School / Class 继续作为组织层，Teacher / Student 继续作为独立 Subject；不建立学校或班级微信主体
+- [x] 新增 `registerTeacherForStudy`：受控预登记 Teacher Subject、teacher class_membership，并生成只返回一次明文的随机 bind code；数据库仅保存 bind_code_hash 与 school-scoped teacher_no_hash
+- [x] 新增统一 `bindSubjectByCode`：前端只传 subject_type、bind_code、subject_no；教师与学生共用标准化、双哈希匹配、Subject / framework / membership 校验、一次性 code、事务和幂等规则
+- [x] 新增统一 `getMySubjectBindings`：按当前 OPENID 解析 user，只返回本人 Teacher / Student active binding、安全 Subject 与组织字段
+- [x] 教师绑定成功后才事务创建 identity_map 并设置 users.role = teacher；学生家长仍写 guardian_student_bindings 且不修改 users.role
+- [x] `ensureTeacherSubject` 本地改为只读既有映射；新教师不再因点击“我是教师”自动创建第二个 Teacher Subject
+- [x] 新增 `pages/teacher-bind/`，教师入口与学生入口均先检查已有 binding，无 binding 才进入对应绑定页；Student 正式入口已切换到统一云函数
+- [x] 既有教师 `T_MT78AZ2K_WINH7` 与现有 Student Binding 数据保持兼容，未修改 Evidence、Analysis 或 Snapshot
+- [x] 新增/修改 JavaScript 与 JSON 静态检查通过，teacher-bind / student-bind / role-select WXML、WXSS 编译通过，教师绑定页模拟器视觉检查通过
+- [ ] `teacher_bind_codes` 云端集合创建/权限确认待微信开发者工具写操作确认
+- [ ] `registerTeacherForStudy`、`bindSubjectByCode`、`getMySubjectBindings`、`ensureTeacherSubject` 等必要函数待部署确认
+- [ ] 待 TEST Teacher 执行错误 code、错误 teacher_no、正确双匹配、重复提交四项自动化验证，并回归现有 Student Binding
+
 ## 模型构建进度与总体概览（2026-08-28）
 
 - [x] `getSubjectModelGuidance` 新增只读 `construction_progress`：以教师 13 个、学生 17 个固定变量为完整分母，返回总体、一级维度和二级变量构建进度

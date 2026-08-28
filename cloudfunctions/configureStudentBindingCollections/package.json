@@ -1,7 +1,7 @@
 {
   "name": "configureStudentBindingCollections",
   "version": "1.0.0",
-  "description": "Restrict the fixed Student Binding MVP collections to ADMINONLY",
+  "description": "Restrict the fixed Teacher and Student Binding collections to ADMINONLY",
   "main": "index.js",
   "dependencies": {
     "@cloudbase/manager-node": "5.8.2",

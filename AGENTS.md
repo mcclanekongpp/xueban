@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。2026-08-28 本地进一步完成主体刻画综合协议、后续补充对话提醒与模型构建进度展示：模型生成不再允许把转写或 extracted_points 直接拼接为模型描述；Teacher / Student Home 可根据当前 Evidence、Evidence Analysis 与 snapshot 状态给出 1—3 个补充提示；模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示。构建进度只表达固定框架的证据覆盖与持续积累，不评价能力、水平或模型质量，也不改变正式 Evidence Analysis 与模型采纳门槛。教师首页持续入口现只保留“今日教学反思”和“学生观察记录”。小程序开发版 `1.0.5` 是最近一次已上传版本，但不含本轮本地改动，暂不应直接提交审核；完成新代码真机回归并上传下一候选版后，再进行平台隐私核对、审核与发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。2026-08-28 本地进一步完成主体刻画综合协议、后续补充对话提醒、模型构建进度展示，以及 Teacher / Student 统一绑定协议：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。小程序开发版 `1.0.5` 是最近一次已上传版本，但不含这些本地改动，暂不应直接提交审核。
 
 ## 五阶段路线
 1. 主体表征
@@ -129,15 +129,18 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 ## 学生采集原则
 学生首次建模：儿童自然访谈 + 行为观察 + 监护人补充。禁止把低年级儿童采集做成长问卷、长书写任务。监护人信息是独立证据来源，不是儿童回答的“标准答案”。
 
-## Student Binding MVP
+## Teacher / Student Subject Binding V1.0
 - 教师、家长与学生知情同意均在线下以纸质方式完成；小程序不提供电子知情同意页面，也不把绑定行为解释为知情同意。
-- 研究团队在线下准备阶段登记 School / Class / Student Subject 并预生成随机绑定码；教师只负责把正确绑定码线下发给对应参与学生家长。
+- 研究团队在线下准备阶段登记 School / Class / Teacher Subject / Student Subject，并为每个待绑定 Subject 预生成随机一次性绑定码。School_ID / Class_ID 是组织编码，不是微信登录主体或单独登录凭据。
+- 教师绑定提交 `bind_code + teacher_no`；学生家长绑定提交 `bind_code + student_no`。线下编号按 `school_id` 范围标准化并哈希，绑定码单独标准化并哈希；二者必须指向同一 Subject。
+- 正式前端统一调用 `bindSubjectByCode` 与 `getMySubjectBindings`。`registerTeacherForStudy` / `registerStudentForStudy` 负责受控预登记；旧 `bindStudentByCode` / `getMyStudentBindings` 仅作历史兼容。
+- 新教师只有绑定成功后才建立 `identity_map` 并把当前 `users.role` 设为 teacher；`ensureTeacherSubject` 只读取既有映射，不再创建 Teacher Subject。既有教师映射继续兼容，不重新绑定、不重复建主体。
 - 学生主体使用独立 Student_ID：`subject_type = student`、`model_framework = student_v1.0`。Student_ID 不等于 OpenID、user_id、学号或绑定码。
 - 学校与班级关系使用 `schools`、`classes`、`class_memberships`；教师与学生均通过 Class_ID 建立组织关系，不创建 teacher_student_direct_relation。
-- 家长端必须同时提交 bind code 与 student_no；云函数分别标准化并哈希，只有二者指向同一 Student Subject 才能绑定。
 - Guardian WeChat 只是认证后的采集终端操作者。`guardian_student_bindings` 连接 `users.user_id` 与 Student_ID，但不得修改 `users.role`；后续学生 Voice / Message / Evidence / Model Snapshot 必须归属 Student_ID。
-- `schools`、`classes`、`class_memberships`、`student_bind_codes`、`guardian_student_bindings` 均为 ADMINONLY，只能经云函数或管理员访问。
-- 当前正式入口为“学生采集”：已有 active binding 进入 Student Home，否则进入 Student Bind；不增加“我是学生”登录角色。
+- `teacher_bind_codes`、`student_bind_codes` 均只保存哈希，不保存明文绑定码或线下编号。绑定成功后事务写入绑定关系并把 code 置为 used；支持 revoked，拒绝跨用户重复绑定。
+- `schools`、`classes`、`class_memberships`、`teacher_bind_codes`、`student_bind_codes`、`guardian_student_bindings` 与 `identity_map` 均不得允许普通前端任意读写。
+- 正式入口分别为“教师采集”和“学生采集”：已有绑定进入对应 Home，否则进入对应 Bind；不把 Student 设计为当前微信账户角色。
 
 ## Student Initial Model MVP
 - 学生 S0 复用 `subject_background`，由 Student Subject、School、Class 与 membership 自动形成；不保存 OpenID、guardian user_id、绑定码、学号或真实姓名。
@@ -193,14 +196,15 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 4. Student Continuous Collection V1.0（已完成）
 5. 真人试采候选版本 `1.0.5` 上传（已完成，已被本地新改动超越）
 6. 主体刻画综合协议、后续补充对话提醒与模型构建进度（本地与云函数完成，待新候选版真机回归/上传）
-7. 微信平台隐私核对、审核与发布
-8. 组织真人教师和学生主体模型采集测试
-9. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
-10. 再评估 Evidence Profile、Evidence Gap 和模型持续演化机制的恢复时点
-11. 主体复现
-12. 双主体互动
-13. 模拟课堂
-14. 实验验证
+7. Teacher / Student 统一绑定协议（本地实现完成，待云端结构、部署与双端绑定回归）
+8. 微信平台隐私核对、审核与发布
+9. 组织真人教师和学生主体模型采集测试
+10. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
+11. 再评估 Evidence Profile、Evidence Gap 和模型持续演化机制的恢复时点
+12. 主体复现
+13. 双主体互动
+14. 模拟课堂
+15. 实验验证
 
 ## 当前暂停项
 - variable_evidence_profiles 的进一步优化

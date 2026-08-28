@@ -54,8 +54,16 @@ exports.main = async (event, context) => {
         user_id: user.user_id,
         identity_type: 'teacher'
       })
-      .limit(1)
+      .limit(2)
       .get()
+
+    if (mapResult.data.length > 1) {
+      return {
+        success: false,
+        code: 'DUPLICATE_TEACHER_BINDINGS',
+        message: '教师主体绑定关系异常，请联系研究团队'
+      }
+    }
 
     // 已经存在主体映射
     if (mapResult.data.length > 0) {
@@ -68,10 +76,10 @@ exports.main = async (event, context) => {
           subject_id: subjectId,
           subject_type: 'teacher'
         })
-        .limit(1)
+        .limit(2)
         .get()
 
-      if (subjectResult.data.length > 0) {
+      if (subjectResult.data.length === 1) {
         const subject = subjectResult.data[0]
 
         return {
@@ -95,58 +103,12 @@ exports.main = async (event, context) => {
       }
     }
 
-    // 4. 生成匿名教师主体编号
-    const subjectId =
-      'T_' +
-      Date.now().toString(36).toUpperCase() +
-      '_' +
-      Math.random().toString(36).slice(2, 7).toUpperCase()
-
-    // 5. 创建匿名教师主体
-    const subjectData = {
-      subject_id: subjectId,
-      subject_type: 'teacher',
-
-      // 当前使用的教师主体模型框架
-      model_framework: 'teacher_v1.0',
-
-      // 尚未完成首次主体模型构建
-      current_version: '',
-
-      status: 'active',
-
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-
-    await db.collection('subjects').add({
-      data: subjectData
-    })
-
-    // 6. 建立账号与匿名教师主体之间的映射
-    const identityMapData = {
-      user_id: user.user_id,
-      subject_id: subjectId,
-      identity_type: 'teacher',
-
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-
-    await db.collection('identity_map').add({
-      data: identityMapData
-    })
-
+    // 新教师必须先由研究团队线下预登记，再通过绑定码完成微信绑定。
+    // 本函数只读取既有映射，绝不因前端选择“教师”而临时创建 Subject。
     return {
-      success: true,
-      is_new_subject: true,
-      subject: {
-        subject_id: subjectId,
-        subject_type: 'teacher',
-        model_framework: 'teacher_v1.0',
-        current_version: '',
-        status: 'active'
-      }
+      success: false,
+      code: 'TEACHER_BINDING_REQUIRED',
+      message: '尚未绑定教师研究主体，请使用线下发放的绑定码完成绑定'
     }
 
   } catch (error) {

@@ -3,22 +3,24 @@
 ## 说明
 本文档记录当前数据库集合、职责和后续计划。
 
-原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Student_ID 不直接使用 OpenID。
+原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-最近一次已上传开发版为 `1.0.5`。本轮主体刻画综合、后续补充提醒与模型构建进度未新增集合：Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis；`getSubjectModelGuidance` 只读这些记录和 model_snapshots，不保存提醒或进度结果。教师正式持续路由使用 `analyzeTeacherEvidence(action = route_continuous)`，学生正式持续路由使用 `analyzeStudentEvidence(action = route_continuous)`。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段、采集状态和 Student-M0 安全摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash`、`bind_code_hash` 或其他 Student 数据。真人 Student Model 构建只写 draft，active 状态仅由 researcher / admin 受控审核产生。
+最近一次已上传开发版为 `1.0.5`。本轮新增 Teacher / Student 统一绑定协议及 `teacher_bind_codes` 设计；现有 `student_bind_codes`、`guardian_student_bindings` 和历史 `identity_map` 继续兼容。Teacher / Student Continuous Collection 仍复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
 
 ## 2. identity_map
-当前实际结构：user_id、subject_id、identity_type、created_at、updated_at。当前只用于 `users.user_id ↔ Teacher Subject`，不保存学生学号。
+当前用于 `users.user_id ↔ Teacher Subject`。历史字段：user_id、subject_id、identity_type、created_at、updated_at。新绑定记录扩展：binding_id、subject_type = teacher、operator_role = teacher、source_bind_id、school_id、class_id、status、is_test、bound_at、revoked_at。
+
+新教师绑定成功后才通过事务写 identity_map 并把 `users.role` 设为 teacher；`ensureTeacherSubject` 仅查询映射，不再创建 Subject。历史教师映射缺少新增冗余字段时继续兼容。identity_map 不保存 teacher_no、teacher_no_hash、学生学号或绑定码。
 
 Student Binding MVP 不把 Guardian user 写成 student identity_map。Student_ID ↔ 正式学号的长期敏感身份映射后续统一设计；当前在线双重校验使用 `student_bind_codes.student_no_hash` 与线下研究主表。
 
 ## 3. subjects
 研究主体主表。核心：subject_id、subject_type、model_framework、current_version、status、created_at、updated_at。
 
-当前 teacher 与 student 均已使用。Student Binding MVP 的学生主体另含：research_alias、is_test；固定 `subject_type = student`、`model_framework = student_v1.0`。Student_ID 不等于 OpenID、user_id、student_no 或 bind code。
+当前 teacher 与 student 均已使用。预登记主体可另含 research_alias、is_test；教师固定 `subject_type = teacher`、`model_framework = teacher_v1.0`，学生固定 `subject_type = student`、`model_framework = student_v1.0`。Teacher_ID / Student_ID 均不等于 OpenID、user_id、线下编号或 bind code。
 
 ## 4. schools
 学校主表。当前字段：school_id、school_name、status、is_test、created_at、updated_at。
@@ -31,48 +33,55 @@ Student Binding MVP 不把 Guardian user 写成 student identity_map。Student_I
 
 `membership_role` V1.0 支持 teacher / student。一个教师可属于多个班，一个班可有多个教师；不建立 teacher_student_direct_relation。
 
-## 7. student_bind_codes
+## 7. teacher_bind_codes
+研究团队在线下准备阶段生成的一次性教师绑定凭据。字段：bind_id、bind_code_hash、subject_id、subject_type = teacher、school_id、class_id、teacher_no_hash、status、is_test、created_by_user_id、created_at、updated_at、used_at、used_by_user_id、used_binding_id、expires_at。
+
+status：unused / used / revoked。数据库不保存 bind code 或 teacher_no 明文；teacher_no_hash 按 school_id 范围计算。正确 code + teacher_no 必须同时匹配，并校验 Teacher Subject、teacher_v1.0 与 active teacher class_membership。绑定成功后由事务创建 identity_map、更新当前 user role 并把 code 置为 used。
+
+## 8. student_bind_codes
 研究团队在线下准备阶段生成的一次性学生绑定凭据。当前字段：bind_id、bind_code_hash、subject_id、school_id、class_id、student_no_hash、status、is_test、created_by_user_id、created_at、updated_at、used_at、used_by_user_id、used_binding_id、expires_at。
 
 status：unused / used / revoked。数据库不保存 bind code 明文，也不保存 student_no 明文；student_no_hash 按 school_id 范围计算，避免假设简单班级学号全系统唯一。绑定码成功使用后由事务置为 used。
 
-## 8. guardian_student_bindings
+新记录增加 `subject_type = student`，历史记录字段缺失时兼容。
+
+## 9. guardian_student_bindings
 认证后的微信采集终端操作者与独立 Student Subject 的关联。当前字段：binding_id、user_id、subject_id、source_bind_id、status、is_test、bound_at、revoked_at、created_at、updated_at。
 
 status：active / revoked。结构允许一个 user 绑定多个孩子；Student MVP 暂时限制一个 Student_ID 同时只有一个 active guardian binding。该集合不会改变 users.role。
 
-## Student Binding 集合权限
-`schools`、`classes`、`class_memberships`、`student_bind_codes`、`guardian_student_bindings` 当前均为 ADMINONLY，只能由管理员或云函数读写。客户端直接读取与写入已实测返回 `DATABASE_PERMISSION_DENIED (-502003)`。
+## Subject Binding 集合权限
+`schools`、`classes`、`class_memberships`、`teacher_bind_codes`、`student_bind_codes`、`guardian_student_bindings` 与 `identity_map` 必须保持 ADMINONLY，只能由管理员或云函数读写。绑定接口只返回 Subject、binding 和安全组织字段，不返回 teacher_no/student_no、任何 hash 或明文 bind code。
 
-## 9. consents
+## 10. consents
 当前集合保留但 Student Binding MVP 不使用。教师、家长和学生知情同意均在线下以纸质方式完成；小程序不保存电子知情同意，也不把绑定码使用视为知情同意。
 
-## 10. subject_background
+## 11. subject_background
 主体基础背景信息，教师 T0 与学生 S0 共用该集合。
 
 学生 S0 当前字段：background_id、subject_id、subject_type、framework、school_id、class_id、grade、academic_year、research_alias、student_display_code、background_version、version、data_source、collection_method、status、is_test、created_at、updated_at。
 
 学生 S0 由 active Student Subject、class_membership 与 classes 自动形成，`data_source = organization_records`、`collection_method = automatic_derivation`。不保存 OpenID、Guardian user_id、bind code/hash、student_no/hash 或真实姓名。
 
-## 11. collection_tasks
+## 12. collection_tasks
 首次建模固定采集任务。当前包含教师 13 项和学生 17 项。
 
 学生任务字段：task_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、task_type、prompt_text、collection_phase、status、task_order、created_at、updated_at。固定 `subject_type = student`、`framework = student_v1.0`、`task_type = voice_prompt`、`collection_phase = initial`，按 S1-1 → S6-3 排序。儿童自然提示保存在数据中，前端不硬编码变量术语。
 
-## 12. collection_progress
+## 13. collection_progress
 首次建模采集进度。教师已完成 13/13；TEST Student 已完成 17/17。
 
 学生关键字段：progress_id、subject_id、subject_type、framework、collection_phase、total_tasks、completed_tasks、completed_count、completed_task_ids[]、current_task_id、current_order、status、started_at、completed_at、created_at、updated_at。status：not_started / in_progress / completed。同一 Student Subject 不重复初始化进度。
 
-## 13. sessions
+## 14. sessions
 一次采集会话。当前支持 Teacher / Student `initial_interview`，教师正式入口 `teaching_reflection`、`student_observation`，以及学生 `student_continuous_record`；`free_dialogue` 只作为历史兼容 session_type 保留在底层。学生首次会话字段包括 subject_id、subject_type = student、framework = student_v1.0、collection_phase = initial、session_type = initial_interview、task_id、operator_user_id、status 与时间字段。学生持续会话固定 `collection_phase = continuous`、`session_type = student_continuous_record`。创建任一学生会话前必须验证当前 user 对 Student_ID 的 active guardian binding。
 
-## 14. messages
+## 15. messages
 保存会话文本与 ASR 转写。属于原始记录层，不是 Evidence。
 
 学生消息归属 Student_ID，核心字段包括 message_id、session_id、subject_id、subject_type、framework、speaker = student、content、message_type、sequence、operator_user_id、is_test、created_at、updated_at。模拟技术消息另含 `status`、`test_source = simulated_transcript`。Guardian user 不是消息主体。
 
-## 15. voice_records
+## 16. voice_records
 保存语音原始记录、云文件、ASR 结果及持续提交状态。
 
 教师持续记录关键字段包括：voice_id、subject_id、session_id、message_id、transcript、continuous_submit_status、continuous_record_id、continuous_submit_evidence_ids、continuous_no_match_reason、continuous_submitted_at。教师正式路由以 voice_id 为幂等单元：同一 voice + variable 使用确定性 Evidence 文档 ID；0 匹配时 Evidence 数组为空，但 Voice / Message 与 no-match reason 继续保留。
@@ -81,7 +90,7 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 
 后续建议逐步补：collection_event_id。
 
-## 16. evidence
+## 17. evidence
 变量级研究证据。
 
 定义：某条原始记录或某个采集事件，对某一个主体变量形成的一条可追溯研究证据。
@@ -96,7 +105,7 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 
 后续建议补：collection_event_id、source_record_type、source_record_id、media_record_id、behavior_record_id、raw_description。
 
-## 17. evidence_analysis
+## 18. evidence_analysis
 对单条 Evidence 的正式分析。
 
 当前教师协议为 V1.1，学生首次与持续 Evidence 共用学生分析协议 V1.0。
@@ -107,7 +116,7 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 
 Evidence Analysis 不直接生成主体模型结论。
 
-## 18. model_snapshots
+## 19. model_snapshots
 保存不可覆盖的主体模型版本。
 
 当前教师 snapshot：`MS_MT873ZQI_9PEUL`，status = active，framework = teacher_v1.0，type = initial，version = 1.0。
@@ -124,7 +133,7 @@ Student Continuous Collection V1.0 不写 model_snapshots，不更新 active Stu
 
 `construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度或人工审批门槛。
 
-## 19. variable_evidence_profiles
+## 20. variable_evidence_profiles
 状态：设计和云函数代码已保留；截至 2026-08-27，当前 `model-dev-d9gkoyaolb464c28d` 数据面未实际存在该集合。机制当前暂停，不阻断教师 / 学生首次模型 MVP 时不继续处理。
 
 用途：保存某个主体某个变量的当前证据健康画像。
@@ -137,14 +146,14 @@ supportive evidence 固定指：relevance_status = relevant / partially_relevant
 
 Profile 只描述“现在有什么证据”，Evidence Gap 才负责“还缺什么”。
 
-## 20. collection_events（计划）
+## 21. collection_events（计划）
 状态：尚未创建。
 
 用途：作为多模态原始记录共同父级，表示一次真实采集事件。
 
 建议字段：collection_event_id、subject_id、subject_type、framework、session_id、event_type、event_title、task_id、target_dimension、target_variable、modalities[]、context、status、started_at、completed_at、created_at、updated_at。
 
-## 21. supplement_candidates（计划）
+## 22. supplement_candidates（计划）
 状态：尚未创建。
 
 用途：保存证据健康层识别出的定向补充候选。
@@ -153,7 +162,7 @@ Profile 只描述“现在有什么证据”，Evidence Gap 才负责“还缺�
 
 status：pending / shown / completed / skipped。
 
-## 22. model_change_candidates（计划）
+## 23. model_change_candidates（计划）
 状态：尚未创建。
 
 用途：保存新证据可能引起的模型变化候选。
@@ -162,23 +171,23 @@ status：pending / shown / completed / skipped。
 
 change_type：content_update / support_strengthening / context_refinement / contradiction_pending / no_change。
 
-## 23. media_records（后续）
+## 24. media_records（后续）
 状态：尚未创建。
 
 用途：图片、视频、文件等多模态原始记录。
 
 建议字段：media_record_id、collection_event_id、subject_id、subject_type、modality、file_id、file_name、mime_type、file_size、source_type、processing_status、extracted_text、extracted_description、created_at、updated_at。
 
-## 24. behavior_records（后续）
+## 25. behavior_records（后续）
 状态：尚未创建。
 
 用途：学生行为观察等结构化/半结构化过程证据。
 
 建议字段：behavior_record_id、collection_event_id、subject_id、observer_type、behavior_type、behavior_code、behavior_description、sequence、timestamp、created_at。
 
-## 25. 当前主要关系
+## 26. 当前主要关系
 
-Student Binding：
+Teacher / Student Subject Binding：
 
 ```text
 schools
@@ -195,11 +204,24 @@ guardian_student_bindings
   ↓
 Student Subject
 
+users (Teacher operator)
+  ↓
+identity_map
+  ↓
+Teacher Subject
+
+teacher_bind_codes
+  ├─ bind_code_hash
+  ├─ school-scoped teacher_no_hash
+  └─ Teacher Subject
+
 student_bind_codes
   ├─ bind_code_hash
   ├─ school-scoped student_no_hash
   └─ Student Subject
 ```
+
+统一前端协议：`bindSubjectByCode(subject_type, bind_code, subject_no)`；统一安全查询：`getMySubjectBindings(subject_type)`。存储层保留教师 identity_map 与学生 guardian binding 的角色差异，以兼容所有既有采集授权函数。
 
 教师登录身份与主体模型主链：
 
