@@ -21,7 +21,7 @@
 - [x] 既有教师 `T_MT78AZ2K_WINH7` 与现有 Student Binding 数据保持兼容，未修改 Evidence、Analysis 或 Snapshot
 - [x] 新增/修改 JavaScript 与 JSON 静态检查通过，teacher-bind / student-bind / role-select WXML、WXSS 编译通过，教师绑定页模拟器视觉检查通过
 - [x] `teacher_bind_codes` 已在 `model-dev-d9gkoyaolb464c28d` 创建并设置为 ADMINONLY；普通小程序端直读实测返回 `DATABASE_PERMISSION_DENIED (-502003)`
-- [x] `registerTeacherForStudy`、`bindSubjectByCode`、`getMySubjectBindings`、`registerStudentForStudy` 与配置函数已部署；`ensureTeacherSubject` 新代码的技能化部署仍在开发者工具确认任务中，但现有教师读取及正式新绑定路径不受阻断
+- [x] `registerTeacherForStudy`、`bindSubjectByCode`、`getMySubjectBindings`、`registerStudentForStudy`、配置函数与只读版 `ensureTeacherSubject` 均已部署；`ensureTeacherSubject` 完整部署通道两次出现 SSL 传输错误后，已通过官方 CLI 单文件增量部署成功，并实测复用既有教师 `T_MT78AZ2K_WINH7`、不创建新主体
 - [x] TEST Teacher 预登记、重复登记拒绝、错误 code、错误 teacher_no、错误凭据后 code 保持 unused、已绑定微信不得改绑其他 Teacher 均通过
 - [x] 现有 Teacher Binding 与 Student Binding 统一查询回归通过；Student 跨主体模型读取和 Session 创建均被授权层拒绝
 - [ ] 全新微信账号的“正确 code + 正确 teacher_no → 成功绑定 → 重复提交幂等”仍需一次真机烟雾测试；当前开发微信已绑定正式 Teacher，不能为通过测试而破坏既有映射
