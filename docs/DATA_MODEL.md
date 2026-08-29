@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-最近一次已上传开发版为 `1.0.5`。本轮新增 Teacher / Student 统一绑定协议及 `teacher_bind_codes` 设计；现有 `student_bind_codes`、`guardian_student_bindings` 和历史 `identity_map` 继续兼容。Teacher / Student Continuous Collection 仍复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
+最近一次已上传开发版为 `1.0.6`。Teacher / Student 统一绑定协议已经进入开发环境，`teacher_bind_codes` 已创建并设置为 ADMINONLY；现有 `student_bind_codes`、`guardian_student_bindings` 和历史 `identity_map` 继续兼容。Teacher / Student Continuous Collection 仍复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。

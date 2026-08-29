@@ -61,10 +61,19 @@ exports.main = async (event = {}) => {
   try {
     const user = await getCurrentUser(openid)
 
+    // 该例外只允许已绑定教师把新增教师绑定码集合收紧为 ADMINONLY，
+    // 不能修改其他集合，也不能把权限放宽。
+    const canHardenTeacherBindingCollection =
+      user &&
+      user.status === 'active' &&
+      user.role === 'teacher' &&
+      collectionName === 'teacher_bind_codes'
+
     if (
       !user ||
       user.status !== 'active' ||
-      !['researcher', 'admin'].includes(user.role)
+      (!['researcher', 'admin'].includes(user.role) &&
+        !canHardenTeacherBindingCollection)
     ) {
       return {
         success: false,
