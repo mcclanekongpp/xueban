@@ -48,7 +48,8 @@
 - [x] 批量响应去除完整 Analysis 正文，只返回 evidence_id、analysis_id、saved 与错误信息
 - [x] Evidence Health refresh 改为分析成功后异步触发，正式页面使用 compact response，不阻塞提交成功反馈
 - [x] 云端缓存 Analysis 批量回归：Teacher 2/2、Student 2/2 成功；压缩后 Teacher 2 条批处理内部耗时 289ms
-- [x] 已转写 TEST Voice 幂等复用通过；新的 URL ASR 路径已完成静态、部署与接口结构核验，后续真人新录音会记录分段耗时
+- [x] URL ASR 实际回归通过：复用既有 TEST 音频建立无 Evidence 临时记录，腾讯识别成功；临时 URL 489ms、ASR 534ms、云函数内部总计 1341ms（客户端含冷启动 5839ms）
+- [x] URL ASR 临时 Voice / Message 回归记录已精确删除，原始 TEST 音频、Evidence、Analysis 与 Snapshot 均未修改
 - [x] `advanceSubjectModel`、Teacher / Student Analysis 云函数运行时为 120 秒，`transcribeVoice` 为 60 秒
 
 ## 全量备份工具 V1.0（2026-08-29）

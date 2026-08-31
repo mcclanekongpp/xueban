@@ -549,6 +549,8 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 
 新成功转写会记录临时 URL、ASR 请求和总耗时的毫秒指标，但临时 URL 本身不保存或返回。冷启动、AI 路由和新 Analysis 仍可能需要数秒；性能优化不降低 Evidence Analysis 或模型采纳门槛。
 
+2026-08-31 URL ASR 回归中，同一 TEST MP3 的临时 URL 获取为 489ms、腾讯 ASR 请求为 534ms、云函数内部总计 1341ms；客户端观察到 5839ms，差额主要反映该次云函数冷启动与调用链固定开销。回归临时 Voice / Message 已删除，原文件和研究证据未改动。
+
 ### 10.12 隐私与权限
 
 - 重要研究集合保持 ADMINONLY，普通前端通过云函数访问；
