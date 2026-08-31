@@ -1,6 +1,6 @@
 # 数据采集小程序整体说明与模拟课堂路线对照
 
-> 文档版本：V1.0
+> 文档版本：V1.1
 >
 > 核对日期：2026-08-31
 >
@@ -41,7 +41,7 @@
 建人 → 验证像不像 → 人与人互动 → 完整课堂 → 模拟/真实实验验证
 ```
 
-当前小程序集中完成的是**阶段1“主体表征”中的真人数据采集、证据识别和初始主体模型构建**。它为未来模拟课堂提供教师和学生的身份、真实证据、模型快照与可追溯关系，但当前本身不是课堂仿真引擎。
+当前小程序集中完成的是**阶段1“主体表征”中的真人数据采集、证据识别、初始主体模型构建，以及持续证据到受控新版本草稿的基础链路**。它为未来模拟课堂提供教师和学生的身份、真实证据、证据健康状态、模型快照与可追溯版本关系，但当前本身不是课堂仿真引擎。
 
 当前执行层面只保留三个基础对象：
 
@@ -474,7 +474,37 @@ Teacher / Student 初始模型生成协议都要求跨证据综合，重点提�
 - 当前 Student 审批函数只允许 researcher / admin，或严格限定的 TEST 技术路径；
 - Teacher 初始模型的生成与 approve 模式相互分离。
 
-### 10.7 模型页面信息结构
+### 10.7 持续证据健康与模型版本候选
+
+持续采集完成 Evidence Analysis 后，正式页面异步调用 `advanceSubjectModel(action = refresh)`：
+
+```text
+主体全部 active Evidence
+  + 每条 Evidence 最新且字段一致的 active Analysis
+  → 完整重建固定 13 / 17 个 Variable Evidence Profile
+  → Profile 内 Evidence Gap / Contradiction / Stagnation
+  → active snapshot 之后的新 continuous Evidence
+  → Model Change Candidate
+```
+
+Profile 每次完整重算，不做 `usable_count += 1`。来源、模态、日期和情境覆盖只由 supportive Evidence 贡献；`unknown` modality 不帮助达到多模态条件。日期按中国标准时间自然日去重，情境保留分析原文并精确去重，因此 `context_count` 只是 V1.0 覆盖辅助指标，不是完成语义聚类后的标准化情境类别数量。
+
+当前内嵌 Gap 类型包括：`no_evidence`、`insufficient_detail`、`single_time_point`、`single_context`、`single_source`、`stale_evidence`、`contradiction_pending`。Stagnation 只提示重复无 supportive、长期 weak、时间/情境重复或 60 天无 supportive 更新，不评价主体能力。
+
+Model Change Candidate 只使用 current active snapshot 之后新增的 continuous supportive usable Evidence。同一变量至少 2 条，且 `contradiction_status != pending`，才可 `eligible_for_draft = true`。随后仍需研究端执行：
+
+```text
+build_draft
+  → 新 revision draft（Teacher-T1 / Student-M1）
+  → 必要时人工处理矛盾
+  → Human Review
+  → approve_draft
+  → 新 active snapshot；旧 active 保留为 superseded
+```
+
+普通 Teacher / Guardian 页面只能触发 refresh，不能 build、resolve 或 approve。单条 Evidence、weak、irrelevant、uncertain、insufficient 都不能生成新版本。
+
+### 10.8 模型页面信息结构
 
 Teacher / Student 模型页采用统一顺序：
 
@@ -489,7 +519,7 @@ Teacher / Student 模型页采用统一顺序：
 
 Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、证据 ID、身份 hash、总分、排名或诊断。
 
-### 10.8 构建进度不是评价分数
+### 10.9 构建进度不是评价分数
 
 `getSubjectModelGuidance` 运行时计算 `construction_progress`，不写数据库。教师以 13 个变量、学生以 17 个变量作为固定分母。
 
@@ -506,7 +536,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 
 该百分比只表示“固定维度的数据采集和证据底座覆盖程度”，不代表能力、水平、模型质量或置信度。它不会降低 Evidence 的相关性、充分性或人工审核门槛。
 
-### 10.9 后续补充对话提醒
+### 10.10 后续补充对话提醒
 
 `getSubjectModelGuidance` 只读当前 Evidence、最新 active Analysis 和 active/draft snapshot，根据以下缺口排序 1—3 个自然对话提示：
 
@@ -519,7 +549,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 
 提示只负责开启对话，不把后续语音硬绑定到提示变量。实际内容仍需重新路由，允许匹配其他变量或 0 匹配。`getSubjectModelGuidance` 本身只读；持续 Analysis 完成后的 `advanceSubjectModel(refresh)` 才会把规则缺口写入 Profile，仍不创建 supplement candidate。
 
-### 10.10 幂等、失败保留与断点继续
+### 10.11 幂等、失败保留与断点继续
 
 - 首次采集按任务独立保存，进度推进前必须已有 Evidence 和 Analysis（学生）或完成原始 Evidence 归档（教师）；
 - Student 首次任务完成校验所有本题 Evidence 都已有 active Analysis；
@@ -534,7 +564,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 - `matches = []` 不制造 Evidence，但保留 no-match 原因；
 - Evidence Analysis 失败不能回滚或丢弃原始 Evidence。
 
-### 10.11 当前语音技术边界
+### 10.12 当前语音技术边界
 
 教师、学生首次采集和学生持续采集均使用：
 
@@ -551,7 +581,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 
 2026-08-31 URL ASR 回归中，同一 TEST MP3 的临时 URL 获取为 489ms、腾讯 ASR 请求为 534ms、云函数内部总计 1341ms；客户端观察到 5839ms，差额主要反映该次云函数冷启动与调用链固定开销。回归临时 Voice / Message 已删除，原文件和研究证据未改动。
 
-### 10.12 隐私与权限
+### 10.13 隐私与权限
 
 - 重要研究集合保持 ADMINONLY，普通前端通过云函数访问；
 - 前端不保存 ASR SecretId / SecretKey；
@@ -590,7 +620,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 | 模型 | `model_snapshots` | draft / active / 历史主体模型版本 |
 | 边界保留 | `consents` | 集合保留，当前纸质知情同意流程不使用 |
 
-最近一次备份盘点实际存在 19 个业务集合，与以上范围一致。
+最近一次加密备份生成时盘点了当时存在的 19 个业务集合；随后新增 `variable_evidence_profiles` 与 `model_change_candidates`，当前数据面为 21 个业务集合。备份工具会通过实际集合自动枚举纳入这两个集合；下一次执行时还应同步把备份注册表中的分类从 `planned` 调整为 `research`，并在一致性报告中明确列出。
 
 ### 11.2 设计或代码保留但当前暂停
 
@@ -691,9 +721,9 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
       ├─ messages(content='')
       └─ voice_records(asr_status=pending)
   → transcribeVoice
-      ├─ 下载云音频
-      ├─ 腾讯 ASR
-      ├─ voice_records.transcript + asr_status
+      ├─ 获取短时云存储签名 URL
+      ├─ 腾讯 ASR 直接读取 URL
+      ├─ voice_records.transcript + asr_status + 分段耗时
       └─ messages.content
 ```
 
@@ -718,9 +748,15 @@ getNextStudentCollectionTask
   ├─ 0 匹配：保留原始记录和 no-match reason
   └─ N 匹配：每变量创建一条 Evidence
                  ↓
-              每条独立 Evidence Analysis
+              analyze_batch（每批最多3条并发）
                  ↓
-              只进入 Evidence 层
+              每条独立 Evidence Analysis 落库
+                 ↓
+              advanceSubjectModel(refresh，异步精简回包)
+                 ↓
+              Profile + Gap + Contradiction + Stagnation
+                 ↓
+              0—多个 Model Change Candidate
 ```
 
 ### 13.6 初始模型链
@@ -737,6 +773,24 @@ T0/S0 + 完整首次采集进度
   → 同一 snapshot status=active
   → getTeacherCurrentModel / getStudentCurrentModel
 ```
+
+### 13.7 持续证据版本链
+
+```text
+当前 active snapshot
+  + snapshot 之后的新 continuous supportive usable Evidence
+  → 同变量不足2条：只保留 Profile / Gap / Candidate，不生成 draft
+  → 同变量至少2条且无 pending contradiction
+  → advanceSubjectModel(build_draft，受控)
+  → Teacher-T1 / Student-M1 revision draft
+  → resolve_contradiction（需要时，受控）
+  → Human Review
+  → advanceSubjectModel(approve_draft，受控)
+  → 新 active snapshot
+  → 旧 active snapshot 保留为 superseded
+```
+
+这一链路是“半自动形成候选、人工控制版本”的机制，不是持续语音提交后自动改变模型。正式采集页面没有 build / resolve / approve 入口。
 
 ## 14. 数据追溯主键关系
 
@@ -797,7 +851,7 @@ Model Snapshot
 | Student-M0 draft / Human Review / active | 已完成 TEST 闭环 |
 | Student Continuous | 已完成真机录音、路由、Evidence 和 Analysis 验证 |
 | Evidence Health / Candidate | 已完成 Teacher 13 + Student 17 Profile 和 5 条 Candidate 实测 |
-| 受控 revision draft / Human Review | 已完成接口、权限和无变化安全回归；待真人新 draft 质量验证 |
+| 受控 revision draft / Human Review | 正向 dry-run 已生成 Student-M1 / 1.1 草稿预案且未落库；正式真人 draft 与审核质量仍待验证 |
 | 模型构建进度/雷达图 | 已完成，只读运行时计算 |
 | 后续补充对话提醒 | 已完成，只读运行时计算 |
 | 微信开发版本 | `1.0.7` 已上传 |
@@ -805,6 +859,10 @@ Model Snapshot
 | 正式发布 | 尚未发布 |
 
 当前已验证数据不应被理解为正式研究效果结论；TEST Student 的 active 模型只证明技术链路可用。
+
+Evidence Health 当前真实回归基线：教师 13 个 Profile、27 个 open Gap、4 个 pending Candidate，其中 1 个达到 draft 门槛；TEST Student 17 个 Profile、41 个 open Gap、1 个 pending Candidate，未达到门槛。数据面共 30 个唯一 Profile 和 5 个唯一 Candidate，无重复；Teacher active snapshot `MS_MT873ZQI_9PEUL`、Student active snapshot `MS_MTBMDOF7_0MNQU` 均未改变。
+
+另以 2 条临时 TEST supportive usable continuous Evidence 完成正向门槛验证：`build_draft(dry_run=true)` 返回 `would_create = true`，生成 Student-M1 / version 1.1 草稿预案，但 `draft_created = false`，预案 snapshot 未落库；临时 2 条 Evidence 与 2 条 Analysis 已精确删除。
 
 ## 17. 对模拟课堂整体构建的贡献
 
@@ -816,6 +874,8 @@ Model Snapshot
 | School / Class / membership | 提供真实组织与师生情境边界 |
 | 原始 Voice / Message | 保留主体真实表达和可复核材料 |
 | Evidence / Analysis | 把原始数据转换为可追溯变量证据 |
+| Variable Evidence Profile / Gap | 表达各变量当前证据覆盖、缺口、矛盾与停滞状态 |
+| Model Change Candidate | 把 active snapshot 之后可能引起变化的新证据组织为可审核候选 |
 | active Model Snapshot | 提供某一时间点可版本化的主体状态输入 |
 | context / uncertainty | 限制未来 Agent 不能脱离证据边界自由发挥 |
 | Human Review | 防止 AI 自动生成直接成为研究事实 |
@@ -883,7 +943,7 @@ Model Snapshot
 Evidence
   → Variable Evidence Profile
   → Evidence Gap
-  → Stagnation Diagnosis
+  → Contradiction / Stagnation Diagnosis
   → Model Change Candidate
   → 受控 revision draft
   → Human Review
@@ -961,6 +1021,7 @@ Evidence
 - 采集：`createSession`、`saveVoiceRecord`、`transcribeVoice`
 - Teacher：`completeTeacherCollectionTask`、`analyzeTeacherEvidence`、`buildTeacherInitialModel`、`getTeacherCurrentModel`
 - Student：`createStudentTaskEvidence`、`completeStudentCollectionTask`、`analyzeStudentEvidence`、`buildStudentInitialModel`、`approveStudentInitialModel`、`getStudentCurrentModel`
+- 持续证据健康与版本：`advanceSubjectModel`（refresh / status / build_draft / resolve_contradiction / approve_draft）、`rebuildVariableEvidenceProfile`（单变量诊断兼容）
 - 通用只读诊断：`getSubjectModelGuidance`
 
 ### 文档与运维
@@ -974,4 +1035,4 @@ Evidence
 
 ## 23. 一句话总结
 
-当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 初始 draft → Human Review → active Model Snapshot → 当前模型展示”的 Teacher / Student 双端闭环；它已经具备模拟课堂所需的主体证据与模型输入基础，但主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段，不能把当前小程序误称为已经完成的模拟课堂系统。
+当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 初始 draft → Human Review → active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 受控 revision draft”的 Teacher / Student 主体表征基础链；它已经具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础，但正式持续模型新版本仍需真人证据与人工审核验证，主体复现、双主体互动、完整课堂仿真和实验验证也仍属于后续阶段。
