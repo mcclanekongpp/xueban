@@ -38,6 +38,8 @@
 - [x] 真实教师完整重建 13 个 Profile、27 个 open Gap、4 个 Candidate（1 个 draft eligible）；TEST Student 重建 17 个 Profile、41 个 open Gap、1 个 Candidate（未达 draft 门槛）
 - [x] 数据面核验为 30 个唯一 Profile、5 个唯一 Candidate；active Teacher snapshot `MS_MT873ZQI_9PEUL` 与 active Student snapshot `MS_MTBMDOF7_0MNQU` 未改变，均无 revision draft
 - [x] 正式教师受控 build_draft 被 `CONTROLLED_MODEL_OPERATION_FORBIDDEN` 拦截；TEST Student dry-run 返回 `NO_DRAFT_ELIGIBLE_CANDIDATES`
+- [x] TEST Student 正向门槛回归：临时加入同变量 2 条 supportive usable continuous Evidence 后，`build_draft(dry_run=true)` 于 36.386 秒生成 Student-M1 / version 1.1 草稿预案，`would_create = true`、`draft_created = false`
+- [x] 正向回归临时 2 条 Evidence + 2 条 Analysis 已精确删除，dry-run snapshot_id 未落库，active Student-M0 未变化
 - [x] 本地规则测试覆盖 supportive-only、unknown modality、单条证据、两条 usable、矛盾阻断，结果 PASS
 
 ## 语音与分析性能 V1.1（2026-08-31）
