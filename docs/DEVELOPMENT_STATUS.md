@@ -5,9 +5,28 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.7` 已上传为微信小程序开发版本，包含持续证据健康、受控模型 revision 主链和语音/分析性能优化；尚未提交审核或正式发布。
+真人试采候选版 `1.0.7` 已上传为微信小程序开发版本，包含持续证据健康、受控模型 revision 主链和语音/分析性能优化；尚未提交审核或正式发布。本地已进一步完成规则驱动自动 revision V1.0，但尚未部署，因此云端 `1.0.7` 当前仍需要受控 build / approve。
 
-当前最高优先级：**完成微信公众平台隐私保护指引核对，提交 `1.0.7` 审核并发布**。
+当前最高优先级：**先部署并用 TEST 持续证据验证规则驱动自动 revision，再生成新的候选版本；不能把尚未部署的本地机制写成 `1.0.7` 已具备能力**。
+
+## 持续模型规则驱动自动更新 V1.0（本地完成，待部署）
+
+- [x] Teacher / Student 共用 `advanceSubjectModel(refresh)`，普通持续采集完成 Analysis 后自动进入同一规则链
+- [x] 自动数量门槛：同一变量至少 2 条 active snapshot 之后新增的 continuous supportive usable Evidence
+- [x] 自动独立性门槛：至少 2 个独立 `continuous_record_id / voice_id / message_id / session_id`
+- [x] 自动覆盖门槛：新证据在中国标准时间自然日、精确去重 context 或 source type 中至少一项达到 2
+- [x] 自动矛盾门槛：`contradiction_status != pending`；AI 无法解释的矛盾进入 `awaiting_additional_evidence`，同一批证据不重复尝试
+- [x] 单条 Evidence、weak、irrelevant、uncertain、insufficient、同源重复和覆盖不足均不能自动更新模型
+- [x] AI 综合继续只使用正式 Evidence Analysis，禁止拼接转写、补写无证据特征、分数、排名、诊断或固定人格
+- [x] 新 revision 保留固定 Teacher 13 / Student 17 变量并通过完整性校验；只更新达到门槛的变量，其余变量沿用父 snapshot
+- [x] 自动 snapshot 使用确定性 ID；重复 refresh 复用同一版本，不创建重复 snapshot
+- [x] 激活时旧 active 事务更新为 superseded，新 snapshot 置 active，并更新 `subjects.current_version / current_snapshot_id`；旧内容不覆盖
+- [x] 自动版本记录 `activation_mode = automatic_rule`、规则版本、触发 user 和候选/证据/分析引用；页面状态显示“规则自动更新”
+- [x] 自动更新失败时 `refresh` 仍保留已保存的 Voice / Message / Evidence / Analysis / Profile / Candidate 和原 active 模型
+- [x] 68 个 JavaScript、102 个 JSON 与 Evidence Health/自动门槛规则测试通过；开发者工具 refresh、模型页和持续采集页编译通过，Console / Network 无错误
+- [ ] `advanceSubjectModel`、`getTeacherCurrentModel`、`getStudentCurrentModel` 尚未部署
+- [ ] 尚未用 TEST Student / Teacher 新持续证据完成云端自动 snapshot 激活验证
+- [ ] 尚未上传包含状态展示改动的新小程序版本；最近上传版本仍为 `1.0.7`
 
 ## 真人试采候选版本 1.0.7（2026-08-31）
 
@@ -331,20 +350,19 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 - [x] 新增共用 `advanceSubjectModel`，一次重建当前主体全部 13 / 17 个 Profile
 - [x] 第一次真实 Teacher / TEST Student Profile 重建与数据库唯一性校验通过
 - [x] Evidence Gap、Contradiction、Stagnation 作为 Profile 状态进入正式主链
-- [x] Model Change Candidate 自动形成，revision draft 与人工批准接口完成
-- [x] 普通采集端只可 refresh，不能 build / resolve / approve
+- [x] Model Change Candidate 自动形成，旧 revision draft / 人工批准接口继续作为兼容与恢复能力保留
+- [x] 本地普通采集端继续只调用 refresh；达到统一门槛时由云函数内部自动创建并激活 revision，前端不能指定候选或绕过规则
 
 ### 继续暂停
 - [ ] supplement_candidates / Targeted Supplement 状态机
 - [ ] unmatched 自动聚类与 framework gap candidate
-- [ ] 自动批准、无人工复核的模型更新
 - [ ] Student-M2 / Teacher-T2 的长期节奏与回退策略
 
-当前实现已经解决“持续 Evidence 永远停留在证据层”的问题，但仍坚持新 Evidence 不直接修改 active 模型。
+本地实现已经解决“持续 Evidence 永远停留在证据层”的问题。新 Evidence 仍不直接原地修改 active 模型：只有满足数量、独立性、覆盖度和无矛盾门槛时才创建新 snapshot 并自动激活；否则只保留证据健康状态与候选。
 
 ## 六、当前第一优先级
 
-完成 `1.0.7` 开发版本上传与微信公众平台隐私保护指引核对，提交审核并发布，随后组织真人教师和学生主体模型持续采集与 revision draft 质量测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
+先部署并验证规则驱动自动 revision，生成新的候选版本，再完成微信公众平台隐私保护指引核对、提交审核和发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
 
 ## 七、学生端状态
 

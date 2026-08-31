@@ -1785,8 +1785,9 @@ Page({
 
 
         // Analysis 成功后幂等刷新 Evidence Profile / Gap /
-        // Contradiction / Stagnation / Model Change Candidate。
-        // 该动作不会修改 active model，也不会自动批准 draft。
+        // Contradiction / Stagnation / Model Change Candidate；达到统一自动
+        // 更新门槛时由云端创建并激活新 snapshot。证据不足或存在矛盾时
+        // 只积累证据，不改变当前模型。
         if (successCount > 0) {
           // Profile / Gap / Candidate 是分析完成后的异步派生层，
           // 不阻塞用户看到提交成功；失败后可由下一次 refresh 幂等补建。
@@ -1818,7 +1819,11 @@ Page({
                   profile_count:
                     Number(result.profile_count || 0),
                   candidate_count:
-                    Number(result.model_change_candidate_count || 0)
+                    Number(result.model_change_candidate_count || 0),
+                  automatic_update_status:
+                    result.automatic_update && result.automatic_update.status
+                      ? result.automatic_update.status
+                      : ''
                 }
               )
             })

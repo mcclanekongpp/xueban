@@ -251,9 +251,11 @@ Page({
           '',
 
         modelStatus:
+          result.model_status ||
           'active',
 
         modelStatusName:
+          result.model_status_name ||
           '已复核',
 
         modelUpdatedAt:

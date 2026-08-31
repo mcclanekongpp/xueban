@@ -265,8 +265,9 @@ Page({
           throw new Error((analysis && analysis.message) || '内容分析尚未完成，请稍后重试')
         }
 
-        // Evidence / Analysis 已经安全落库后刷新证据健康层。该步骤只写
-        // Profile / Gap / Candidate，不修改 active Student-M0。
+        // Evidence / Analysis 已经安全落库后刷新证据健康层。达到统一
+        // 自动更新门槛时由云端创建并激活新 snapshot；未达门槛或存在
+        // 矛盾时只写 Profile / Gap / Candidate，不修改 active Student-M0。
         // 证据健康层在分析落库后异步刷新，不阻塞用户看到“已保存”。
         // 请求已经发出后页面返回不会改变 Voice / Message / Analysis 状态；
         // 失败时下一次提交或研究端 refresh 仍可幂等补建。
@@ -284,7 +285,10 @@ Page({
             console.log('学生证据健康层刷新：', {
               success: result.success === true,
               profile_count: Number(result.profile_count || 0),
-              candidate_count: Number(result.model_change_candidate_count || 0)
+              candidate_count: Number(result.model_change_candidate_count || 0),
+              automatic_update_status: result.automatic_update && result.automatic_update.status
+                ? result.automatic_update.status
+                : ''
             })
           })
           .catch((healthError) => {

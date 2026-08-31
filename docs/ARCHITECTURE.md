@@ -2,9 +2,9 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。包含上述改动的小程序开发版 `1.0.7` 已上传；下一步是微信平台隐私核对、审核与发布。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已在本地完成静态与规则回归，尚待部署验证。小程序开发版 `1.0.7` 已上传；它仍是半自动 revision 版本，不包含本地自动更新改动。
 
-Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。它们只建立证据健康台账和变更候选，不直接修改 active 模型；新 revision 仍遵守“受控 draft → Human Review → active”。Targeted Supplement、Unmatched 聚类、自动批准和更长期的 Student-M2 / Teacher-T2 策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
+Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。本地自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
 ## 0.1 Teacher / Student Subject Binding V1.0
 
@@ -72,7 +72,7 @@ Student-M0 使用 `student_initial_model_v1.2` 对 supportive Evidence Analysis 
 
 ### Teacher Continuous 真人提交链
 
-教师持续记录仍使用 Voice → ASR → Message → 内容路由 → 0—5 条 Evidence → 独立 Evidence Analysis。正式前端通过 `analyzeTeacherEvidence(action = route_continuous)` 完成 AI 路由，并用 `action = analyze_batch` 以每批最多 3 条并发完成各 Evidence 的独立校验与落库。路由使用确定性 continuous/evidence 文档 ID 保持重试幂等；无匹配时保存 Voice、Message、continuous_record_id 与原因，不制造 Evidence。Analysis 成功后异步触发 `advanceSubjectModel(refresh)`，只重建证据健康层和候选，不直接更新 active Teacher Model。
+教师持续记录仍使用 Voice → ASR → Message → 内容路由 → 0—5 条 Evidence → 独立 Evidence Analysis。正式前端通过 `analyzeTeacherEvidence(action = route_continuous)` 完成 AI 路由，并用 `action = analyze_batch` 以每批最多 3 条并发完成各 Evidence 的独立校验与落库。路由使用确定性 continuous/evidence 文档 ID 保持重试幂等；无匹配时保存 Voice、Message、continuous_record_id 与原因，不制造 Evidence。Analysis 成功后异步触发 `advanceSubjectModel(refresh)`：先重建证据健康层和候选；达到自动门槛时创建并激活新的 Teacher revision snapshot，否则 active Teacher Model 保持不变。
 
 ## 0.3 Student Continuous Collection V1.0
 
@@ -90,7 +90,7 @@ Student Home（17/17）
 
 该流程继续以 active `guardian_student_bindings` 为授权边界。Student_ID 是 Voice、Message、Evidence 与 Evidence Analysis 的主体，Guardian user 只作为 operator。来源类型 `student_continuous_record` 只提供情境，不能直接绑定变量；路由最多返回 5 个有明确原文依据的变量，也允许 `matches = []`。
 
-无匹配时仍保存 Voice、Message、`continuous_record_id` 与 no-match reason，不制造 Evidence。ASR、路由或 Analysis 失败时保留原始记录并允许重试。持续 Evidence 不直接修改 active Student-M0；达到规则门槛后只形成 Model Change Candidate，受控研究调用才可生成 Student-M1 draft，人工审核前 current snapshot 不变。
+无匹配时仍保存 Voice、Message、`continuous_record_id` 与 no-match reason，不制造 Evidence。ASR、路由或 Analysis 失败时保留原始记录并允许重试。持续 Evidence 不原地修改 active Student-M0；达到自动更新门槛后创建 Student-M1/M2 revision snapshot 并自动激活，未达门槛或存在矛盾时 current snapshot 不变。
 
 正式页面复用 `analyzeStudentEvidence` 已配置的 120 秒运行环境完成 AI 内容路由和批量 Analysis；独立的 `submitStudentContinuousRecord` 当前保留为无前端入口的实现，避免其云端默认 3 秒运行限制阻断真人提交。
 
@@ -103,9 +103,8 @@ Evidence + latest active Evidence Analysis + current active/draft Snapshot
   → Teacher Reflection / Student Observation / Student “再说一说”
   → 内容独立路由
   → 新 Evidence + Evidence Analysis
-  → 后续受控模型 draft
-  → Human Review
-  → 新 active Snapshot
+  → 统一自动更新规则判断
+  → 新 revision Snapshot（满足门槛时自动 active）
 ```
 
 `getSubjectModelGuidance` 不创建 Evidence Gap 集合或候选记录，也不写数据库。它只使用 supportive Evidence（relevant / partially_relevant 且 usable / weak）的数量、充分性、情境和时间覆盖，结合当前 snapshot 状态进行优先级排序。提示问题只负责开启对话，不把入口类型硬绑定模型变量；实际语音仍可匹配 0—5 个变量或 0 匹配。
@@ -123,11 +122,11 @@ Teacher 生成协议升级为 `teacher_initial_model_v1.3`，Student 生成协�
 - supportive Evidence 覆盖至少 2 个中国标准时间自然日：10%；
 - supportive Evidence 覆盖至少 2 个 context 或 source type：5%。
 
-supportive 仍严格限定为 `relevance_status = relevant / partially_relevant` 且 `evidence_sufficiency = usable / weak`。irrelevant、uncertain、insufficient 不增加支持覆盖；进度计算不会调整 relevance、sufficiency、confidence、模型状态或 Human Review 门槛。一级维度进度是该维度固定变量的算术平均，总体进度是教师 13 个或学生 17 个固定变量的算术平均，因此未采集变量必然以 0 计入，不能通过只重复少数变量获得 100%。
+supportive 仍严格限定为 `relevance_status = relevant / partially_relevant` 且 `evidence_sufficiency = usable / weak`。irrelevant、uncertain、insufficient 不增加支持覆盖；进度计算不会调整 relevance、sufficiency、confidence、首次模型审核或持续模型自动更新门槛。一级维度进度是该维度固定变量的算术平均，总体进度是教师 13 个或学生 17 个固定变量的算术平均，因此未采集变量必然以 0 计入，不能通过只重复少数变量获得 100%。
 
-Teacher / Student 模型页统一按“100 字内总体概览 → 构建进度百分比与一级维度雷达图 → 具体变量信息”展示。新 snapshot 优先使用经模型生成与人工复核的 `model_data.overview_summary`；旧 active snapshot 保持不可变，页面暂以全维度构建状态摘要作为兼容概览，不回写历史数据。
+Teacher / Student 模型页统一按“100 字内总体概览 → 构建进度百分比与一级维度雷达图 → 具体变量信息”展示。新 snapshot 优先使用经模型生成并通过首次审核或持续自动规则校验的 `model_data.overview_summary`；旧 active snapshot 保持不可变，页面暂以全维度构建状态摘要作为兼容概览，不回写历史数据。
 
-## 0.6 持续证据到新模型版本 V1.0
+## 0.6 持续证据规则驱动自动更新 V1.0
 
 ```text
 Continuous Evidence + latest valid Evidence Analysis
@@ -135,10 +134,10 @@ Continuous Evidence + latest valid Evidence Analysis
   → 13 / 17 个 Variable Evidence Profile 完整重建
   → Profile 内 Evidence Gap / Contradiction / Stagnation
   → Model Change Candidate
-  → advanceSubjectModel(build_draft，受控研究调用)
-  → revision draft（Teacher-T1 / Student-M1）
-  → 矛盾处理 + Human Review
-  → advanceSubjectModel(approve_draft，受控研究调用)
+  → 自动门槛校验
+  → AI 跨证据综合 + 固定 13 / 17 变量结构校验
+  → revision snapshot（Teacher-T1 / Student-M1...）
+  → 规则引擎自动激活
   → 新 active snapshot；旧 active → superseded，历史数据不覆盖
 ```
 
@@ -146,15 +145,17 @@ Continuous Evidence + latest valid Evidence Analysis
 
 Evidence Gap V1.0 作为 Profile 内嵌状态保存，包括 no_evidence、insufficient_detail、single_time_point、single_context、single_source、stale_evidence、contradiction_pending。Stagnation 以规则标记 repeated_without_supportive_evidence、repeated_weak_only、repeated_same_context_time 或 no_supportive_update_60d；它是研究提醒，不评价主体。
 
-Model Change Candidate 只考察 current active snapshot 之后的新 continuous supportive usable Evidence。单条新 Evidence、supportive weak、irrelevant、uncertain 或 insufficient 均不能触发 draft；同一变量至少 2 条新的 supportive usable Evidence 且 `contradiction_status != pending` 才是 draft eligible。AI 综合如发现新旧描述可能冲突，候选转为 pending，人工选择 retain_current / revise_with_new_evidence / defer 后才能继续。普通 Teacher / Guardian 页面不能调用 build / resolve / approve。
+Model Change Candidate 只考察 current active snapshot 之后的新 continuous supportive usable Evidence。自动更新必须同时满足：同一变量至少 2 条新 supportive usable Evidence；来自至少 2 个独立 `continuous_record_id / voice_id / message_id / session_id`；新证据的中国标准时间自然日、精确去重 context 或 source type 至少一项达到 2；`contradiction_status != pending`。单条新 Evidence、supportive weak、irrelevant、uncertain、insufficient、同一原始记录重复或覆盖不足都不能触发更新。
+
+AI 综合输出还必须通过 100 字概览、候选变量精确匹配和固定 13 / 17 变量完整性校验。无法由情境或时间差异解释的冲突会进入 `awaiting_additional_evidence`，同一批证据不会反复尝试；至少出现新的 supportive usable Evidence 后才重新评估。自动 snapshot 使用确定性 ID 保证重试幂等；激活事务只把当前父 snapshot 转为 superseded，并更新 Subject 指针。旧的 `build_draft / resolve_contradiction / approve_draft` 继续保留为受控兼容/恢复接口，但不再是正常持续采集链的必经步骤。
 
 ## 0.7 语音与分析性能 V1.1
 
 - `transcribeVoice` 直接把云存储临时签名 URL 交给腾讯一句话识别，避免云函数下载、Base64 编码和再次上传完整 MP3；临时 URL 不保存、不回传。
 - `voice_records` 增加 ASR 分段耗时字段，以区分获取临时 URL、腾讯 ASR 请求和整体云函数耗时。
 - 多变量 Analysis 从前端串行 N 次云函数调用改为一次 `analyze_batch`，云函数内部每批最多并发 3 条；每条仍使用独立协议、独立记录和幂等检查。
-- 批量 Analysis 与 Evidence Health 正式回包均使用精简字段；健康层 refresh 在 Analysis 落库后异步执行，不阻塞页面成功反馈。
-- 性能优化不改变 relevance、sufficiency、supportive、模型置信度或 Human Review 门槛。
+- 批量 Analysis 与 Evidence Health 正式回包均使用精简字段；健康层和自动更新在 Analysis 落库后异步执行，不阻塞页面成功反馈。
+- 性能优化不改变 relevance、sufficiency、supportive、模型置信度、首次模型审核或持续模型自动更新门槛。
 
 ## 0.8 真人试采发布边界
 
@@ -201,7 +202,7 @@ Evidence Health Layer
         ↓
 Model Change Candidate
         ↓
-人工 / 规则审核
+统一自动更新规则
         ↓
 Model Snapshot
         ↓
@@ -234,7 +235,7 @@ Current Subject Model
 - model_change_candidates
 - model_snapshots
 
-当前已实现 Candidate → revision draft → Human Review → 新 active snapshot；普通采集端只能刷新证据健康层，不能生成或批准模型版本。
+当前本地已实现 Candidate → 自动门槛 → revision snapshot → 自动 active；普通采集端只触发 `refresh`，不能降低规则、指定候选或直接改写 snapshot。旧受控 build / resolve / approve 接口仅作兼容与恢复。
 
 ## 3. 教师—学生共用与差异
 
@@ -329,7 +330,7 @@ V1.0 已实现确定性状态 `not_evaluated / none / pending`，reason code 包
 
 当前变化类型：content_update、support_strengthening、context_refinement、contradiction_pending、no_change。
 
-同一变量至少 2 条 active snapshot 之后新增的 supportive usable continuous Evidence 才允许进入 draft；待处理矛盾必须先由研究人员解决。正式更新创建新的 revision model snapshot，先 draft、后 Human Review、再 active，旧 snapshot 不覆盖。
+同一变量至少 2 条 active snapshot 之后新增的 supportive usable continuous Evidence只是数量底线；自动更新还要求 2 个独立原始记录，以及跨日/跨情境/跨来源至少一项覆盖，且无 pending contradiction。满足后创建新的 revision model snapshot 并自动 active；无法解释的矛盾保留并等待新证据，旧 snapshot 永不覆盖。
 
 ## 13. 多模态策略
 架构支持 voice / text / image / video / behavior / file。

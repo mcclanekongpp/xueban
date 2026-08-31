@@ -206,6 +206,18 @@ exports.main = async (event, context) => {
         snapshot.model_version ||
         '',
 
+      model_status:
+        'active',
+
+      model_status_name:
+        snapshot.activation_mode === 'automatic_rule'
+          ? '规则自动更新'
+          : '已复核',
+
+      activation_mode:
+        snapshot.activation_mode ||
+        '',
+
       model:
         snapshot.model_data ||
         null,
@@ -216,6 +228,11 @@ exports.main = async (event, context) => {
 
       updated_at:
         snapshot.updated_at ||
+        null,
+
+      activated_at:
+        snapshot.activated_at ||
+        snapshot.approved_at ||
         null,
 
       message:

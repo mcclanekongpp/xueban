@@ -150,6 +150,7 @@ exports.main = async (event = {}) => {
     }
 
     const modelStatus = snapshot.status === 'active' ? 'active' : 'draft'
+    const activationMode = String(snapshot.activation_mode || '').trim()
 
     return {
       success: true,
@@ -160,9 +161,13 @@ exports.main = async (event = {}) => {
       snapshot_type: snapshot.snapshot_type || snapshot.model_type || 'initial',
       model_version: snapshot.model_version || snapshot.version || '1.0',
       model_status: modelStatus,
-      model_status_name: modelStatus === 'active' ? '已复核' : '待复核',
+      model_status_name: modelStatus === 'active'
+        ? activationMode === 'automatic_rule' ? '规则自动更新' : '已复核'
+        : '待复核',
+      activation_mode: activationMode,
       model: sanitizeModel(snapshot.model_data),
       approved_at: modelStatus === 'active' ? snapshot.approved_at || null : null,
+      activated_at: modelStatus === 'active' ? snapshot.activated_at || snapshot.approved_at || null : null,
       created_at: snapshot.created_at || null,
       updated_at: snapshot.updated_at || null,
       access_scope: hasActiveBinding ? 'bound_student_safe_summary' : 'research_safe_summary'

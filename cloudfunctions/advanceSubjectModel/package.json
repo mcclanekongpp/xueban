@@ -1,7 +1,7 @@
 {
   "name": "advanceSubjectModel",
-  "version": "1.0.0",
-  "description": "Teacher / Student evidence health and controlled model revision pipeline",
+  "version": "1.1.0",
+  "description": "Teacher / Student evidence health and rule-driven automatic model revision pipeline",
   "main": "index.js",
   "dependencies": {
     "@cloudbase/node-sdk": "^3.18.3",

@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。Teacher / Student 统一绑定协议已建立：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。持续证据健康、Model Change Candidate、受控 revision draft / Human Review 主链和语音性能优化已进入开发环境。全量备份工具 V1.0 已建立并完成首次加密全量备份。小程序开发版 `1.0.7` 已于 2026-08-31 上传；尚未提交微信审核或正式发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。Teacher / Student 统一绑定协议已建立：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链已在本地完成，等待部署验证；语音性能优化已进入开发环境。全量备份工具 V1.0 已建立并完成首次加密全量备份。小程序开发版 `1.0.7` 已于 2026-08-31 上传；尚未提交微信审核或正式发布，且尚不包含本地自动 revision 改动。
 
 ## 五阶段路线
 1. 主体表征
@@ -80,9 +80,9 @@
 
 前端状态语言：证据不足、初步描述、已有一定支持、较稳定。“较稳定”仍然可以被后续证据修正。
 
-模型中的“当前主体刻画”不是 ASR 转写摘要或 Evidence Analysis 要点列表。生成层必须综合有证据支持的情境、关注/理解、判断依据、行动/调整、结果与适用边界；若证据只支持行为，不得反推深层信念。具体原始例子留在 Evidence / evidence_basis，模型描述负责跨证据提炼。任何新综合结果先形成 draft，经人工复核后才能成为 active；不得静默改写已审批 snapshot。
+模型中的“当前主体刻画”不是 ASR 转写摘要或 Evidence Analysis 要点列表。生成层必须综合有证据支持的情境、关注/理解、判断依据、行动/调整、结果与适用边界；若证据只支持行为，不得反推深层信念。具体原始例子留在 Evidence / evidence_basis，模型描述负责跨证据提炼。首次模型继续保留既有 draft / review 流程；已有 active 模型后的持续 revision 在满足统一自动更新门槛时由规则引擎激活新 snapshot。任何路径都不得覆盖旧 snapshot。
 
-模型构建进度不是测评得分。V1.0 以固定 13 / 17 个变量为分母，只计算每个变量是否已有 active Evidence、有效 Analysis、supportive Evidence、重复支持、跨日和跨情境/来源覆盖，再汇总为一级维度与总体百分比。supportive 的正式定义和模型采纳门槛保持不变；不得为了提高百分比把 irrelevant / uncertain / insufficient 数据计入支持，也不得降低 confidence 或 Human Review 要求。
+模型构建进度不是测评得分。V1.0 以固定 13 / 17 个变量为分母，只计算每个变量是否已有 active Evidence、有效 Analysis、supportive Evidence、重复支持、跨日和跨情境/来源覆盖，再汇总为一级维度与总体百分比。supportive 的正式定义和模型采纳门槛保持不变；不得为了提高百分比把 irrelevant / uncertain / insufficient 数据计入支持，也不得降低 confidence、首次模型审核或持续模型自动更新门槛。
 
 ## 证据基本原则
 1. 原始记录与模型结论分离。
@@ -119,7 +119,7 @@
 
 共用的是机制，不共用变量定义与采集内容。
 
-当前正式实现由 `advanceSubjectModel` 统一处理 Teacher / Student：每次 `refresh` 从全部 active Evidence 和最新一致的 active Evidence Analysis 完整重建 13 / 17 个 Profile，在 Profile 内保存 Gap、矛盾和停滞状态，并对 active snapshot 之后的新 continuous supportive usable Evidence 生成 Model Change Candidate。单条新 Evidence、weak 或 insufficient 均不能生成新模型；同一变量至少 2 条新的 supportive usable continuous Evidence 且无待处理矛盾，才允许研究端构建新的 revision draft。draft 必须人工审核后才能 active，旧 snapshot 永不覆盖。
+当前正式实现由 `advanceSubjectModel` 统一处理 Teacher / Student：每次 `refresh` 从全部 active Evidence 和最新一致的 active Evidence Analysis 完整重建 13 / 17 个 Profile，在 Profile 内保存 Gap、矛盾和停滞状态，并对 active snapshot 之后的新 continuous supportive usable Evidence 生成 Model Change Candidate。持续模型自动更新 V1.0 只有同时满足以下条件才执行：同一变量至少 2 条新的 supportive usable continuous Evidence；来自至少 2 个独立原始记录；跨中国标准时间自然日、精确去重 context 或 source type 至少一项达到 2；不存在 pending contradiction。满足后系统自动综合、校验完整框架、创建新 revision snapshot 并激活，旧 active 转 superseded。单条 Evidence、weak、irrelevant、uncertain、insufficient、重复原始记录或覆盖不足都只积累证据，不能更新模型。
 
 ## 多模态原则
 系统底层从一开始支持：voice / text / image / video / behavior / file。
@@ -160,7 +160,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 正式页面通过 `analyzeStudentEvidence(action = route_continuous)` 完成路由，再以 `action = analyze_batch` 并发处理最多 5 条独立 Analysis；所有调用都校验当前 user 对目标 Student_ID 的 active Guardian binding。
 - Voice、Message、Evidence 与 Evidence Analysis 的 `subject_id` 始终是 Student_ID；Guardian user 只记录为 `operator_user_id`。
 - `matches = []` 时不制造 Evidence，Voice、Message 与 `continuous_record_id` 仍保存；路由或分析失败时前端保留当前 voice_id 和 transcript，允许重试。
-- Student Continuous Evidence 不直接修改 active Student-M0；Analysis 完成后异步刷新 Profile / Gap / Contradiction / Stagnation / Model Change Candidate。达到门槛后只能由受控研究端生成 Student-M1 draft，并经人工审核后才可成为 active。
+- Student Continuous Evidence 不直接原地修改 active Student-M0；Analysis 完成后异步刷新 Profile / Gap / Contradiction / Stagnation / Model Change Candidate。达到统一自动门槛后，系统创建 Student-M1/M2 revision snapshot 并自动激活；未达门槛或有矛盾时保持当前 active 不变。
 - Student Home 的后续提示由 `getSubjectModelGuidance` 根据 supportive Evidence 的数量、充分性、情境与时间覆盖动态排序；提示问题不绑定变量，`analyzeStudentEvidence(action = route_continuous)` 仍按实际语音内容返回 0—5 个变量，允许 0 匹配。
 - TEST Student 已完成一次 12.16 秒真机持续录音、腾讯 ASR、3 条路由 Evidence 与 3 条正式 Analysis 的端到端验证。
 
@@ -177,7 +177,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
 - 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
-- 版本 `1.0.7` 是最近一次已上传开发版本，增加持续证据健康与半自动模型 revision 主链，并优化 URL ASR、批量 Analysis 和异步派生层。微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
+- 版本 `1.0.7` 是最近一次已上传开发版本，包含持续证据健康与半自动模型 revision 主链，并优化 URL ASR、批量 Analysis 和异步派生层。本地已把持续 revision 改为统一规则自动更新，但尚未部署或进入新的小程序候选版本。微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
 
 ## 数据与隐私原则
 1. 身份信息与研究主体信息分离。
@@ -209,8 +209,8 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 8. 微信平台隐私核对、审核与发布
 9. 组织真人教师和学生主体模型采集测试
 10. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
-11. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入候选版本）
-12. 用真人持续证据验证 revision draft → Human Review → active 的质量与节奏
+11. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
+12. 规则驱动持续模型自动更新（本地完成，待部署并用 TEST / 真人持续证据验证）
 13. 主体复现
 14. 双主体互动
 15. 模拟课堂
@@ -219,11 +219,10 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 ## 当前暂停项
 - Targeted Supplement
 - Unmatched 聚类
-- 自动批准或无需人工复核的模型版本更新
 - 图片 / 视频等复杂多模态
 - Student-M2 及长期演化策略
 
-Targeted Supplement、Unmatched 聚类和长期自动演化继续暂停。Evidence Profile、Profile 内 Gap、矛盾/停滞状态与 Model Change Candidate 已进入正式持续采集派生链，但 active 模型仍只允许经受控 draft + Human Review 更新。当前学生 MVP 以语音为主，允许必要的人工观察文本或结构化记录，同时保持 Evidence 底层的模态无关性。
+Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。Evidence Profile、Profile 内 Gap、矛盾/停滞状态与 Model Change Candidate 已进入持续采集派生链；本地 V1.0 在严格自动门槛满足时创建并激活新的 revision snapshot，未达门槛或矛盾 pending 时只保留证据与候选。当前学生 MVP 以语音为主，允许必要的人工观察文本或结构化记录，同时保持 Evidence 底层的模态无关性。
 
 ## Codex 工作规则
 1. 修改代码前先阅读 `AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`。

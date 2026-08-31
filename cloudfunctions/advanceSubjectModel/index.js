@@ -1,6 +1,7 @@
 const cloud = require('wx-server-sdk')
 const tcb = require('@cloudbase/node-sdk')
 const {
+  AUTO_UPDATE_RULE_VERSION,
   FRAMEWORKS,
   buildHealthState,
   supportive,
@@ -8,6 +9,12 @@ const {
   unique,
   variablesFor
 } = require('./evidence-health-core')
+const {
+  deterministicId,
+  mergeRevisionSources,
+  nextRevision,
+  validateSnapshotFramework
+} = require('./revision-core')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -19,6 +26,7 @@ const aiApp = tcb.init({
 
 const PROFILE_COLLECTION = 'variable_evidence_profiles'
 const CANDIDATE_COLLECTION = 'model_change_candidates'
+const AUTOMATIC_ACTOR_ID = 'system:auto_subject_model_update'
 
 function makeId(prefix) {
   return `${prefix}_${Date.now().toString(36).toUpperCase()}_${Math.random()
@@ -242,6 +250,17 @@ async function writeHealth(auth, calculated) {
       ? existingCandidate.contradiction_resolution
       : null
     const preservedResolved = resolution && resolution.decision !== 'defer'
+    const attemptedEvidenceIds = unique(
+      existingCandidate && Array.isArray(existingCandidate.auto_update_attempted_evidence_ids)
+        ? existingCandidate.auto_update_attempted_evidence_ids
+        : []
+    )
+    const currentEvidenceIds = unique(Array.isArray(state.supporting_evidence_ids) ? state.supporting_evidence_ids : [])
+    const sameEvidenceAsDeferredAttempt = (
+      text(existingCandidate && existingCandidate.review_status) === 'awaiting_additional_evidence' &&
+      attemptedEvidenceIds.length === currentEvidenceIds.length &&
+      attemptedEvidenceIds.every((id) => currentEvidenceIds.includes(id))
+    )
     const record = {
       ...state,
       candidate_id: candidateId,
@@ -254,9 +273,20 @@ async function writeHealth(auth, calculated) {
       eligible_for_draft: preservedResolved && resolution.decision === 'retain_current'
         ? false
         : state.eligible_for_draft,
+      auto_update_eligible: preservedResolved && resolution.decision === 'retain_current'
+        ? false
+        : state.auto_update_eligible && !sameEvidenceAsDeferredAttempt,
+      auto_update_blockers: sameEvidenceAsDeferredAttempt
+        ? unique([...(state.auto_update_blockers || []), 'waiting_for_additional_evidence_after_contradiction'])
+        : state.auto_update_blockers,
+      auto_update_attempted_evidence_ids: attemptedEvidenceIds,
+      auto_update_last_attempted_count: Number(existingCandidate && existingCandidate.auto_update_last_attempted_count) || 0,
+      auto_update_contradiction_notes: text(existingCandidate && existingCandidate.auto_update_contradiction_notes),
       review_status: preservedResolved && resolution.decision === 'retain_current'
         ? 'resolved_no_change'
-        : state.review_status,
+        : sameEvidenceAsDeferredAttempt
+          ? 'awaiting_additional_evidence'
+          : state.review_status,
       updated_at: now
     }
     if (existingCandidate) {
@@ -339,15 +369,7 @@ function findModelVariable(modelData, variableId) {
   return null
 }
 
-function nextRevision(active) {
-  if (Number.isInteger(active.revision_number) && active.revision_number >= 0) {
-    return active.revision_number + 1
-  }
-  const match = text(active.model_version || active.version).match(/^1\.(\d+)$/)
-  return match ? Number(match[1]) + 1 : 1
-}
-
-function revisionPrompt(auth, active, candidates, health) {
+function revisionPrompt(auth, active, candidates, health, automatic = false) {
   const payload = candidates.map((candidate) => {
     const pairs = health.supportive_pairs_by_variable.get(candidate.variable_id) || []
     return {
@@ -373,15 +395,15 @@ function revisionPrompt(auth, active, candidates, health) {
   })
 
   return `
-你是教育研究中的主体模型版本综合器。本次只处理已经通过规则门槛的 Model Change Candidate，并生成待人工复核的模型草稿内容。
+你是教育研究中的主体模型版本综合器。本次只处理已经通过规则门槛的 Model Change Candidate，并生成${automatic ? '可由规则引擎自动激活' : '受控'}的新版本草稿内容。
 
 固定规则：
 1. 主体类型为 ${auth.subject_type}，框架为 ${auth.framework}；不得改变固定变量框架。
 2. 只能综合输入中的 Evidence Analysis，不得补充原文没有支持的特征。
 3. 必须跨证据提炼“稳定出现的模式、适用情境、变化与边界”，不得拼接转写或逐条复述 extracted_points。
-4. 单条新证据不能改变模型；输入候选已由系统校验至少包含 2 条新的 supportive usable 持续证据。
+4. 单条新证据不能改变模型；输入候选已由系统校验至少包含 2 条新的 supportive usable 持续证据，且来自至少 2 个独立原始记录，并满足跨日、跨情境或跨来源至少一项覆盖。
 5. weak / insufficient 不得单独推动模型变化。
-6. 若新旧描述存在无法由情境差异解释的冲突，contradiction_status 必须为 pending，并说明待人工核对点；不得擅自选边。
+6. 若新旧描述存在表面差异，应优先在 current_description 与 uncertainty 中保留不同情境下的变化和边界；只有无法由情境、时间或证据范围解释的逻辑冲突，contradiction_status 才能为 pending。pending 会阻断自动更新并等待后续证据，不得擅自选边。
 7. 不生成总分、排名、固定人格、心理诊断、教师/学生优劣或永久性结论。
 8. uncertainty 必须保留证据范围、跨时间限制和未覆盖情境。
 9. overview_summary 不超过100个汉字，并覆盖当前 ${auth.subject_type === 'teacher' ? 'T1—T5' : 'S1—S6'}，作为整个新草稿的概括。
@@ -391,7 +413,21 @@ function revisionPrompt(auth, active, candidates, health) {
 ${JSON.stringify({
     snapshot_id: active.snapshot_id,
     model_version: active.model_version || active.version,
-    overview_summary: active.model_data && active.model_data.overview_summary
+    overview_summary: active.model_data && active.model_data.overview_summary,
+    dimensions: active.model_data && Array.isArray(active.model_data.dimensions)
+      ? active.model_data.dimensions.map((dimension) => ({
+        dimension_id: dimension.dimension_id,
+        dimension_name: dimension.dimension_name,
+        variables: (Array.isArray(dimension.variables) ? dimension.variables : []).map((variable) => ({
+          variable_id: variable.variable_id,
+          variable_name: variable.variable_name,
+          current_status: variable.current_status,
+          current_description: variable.current_description || variable.current_state,
+          contexts: variable.contexts,
+          uncertainty: variable.uncertainty
+        }))
+      }))
+      : []
   })}
 
 候选与完整 supportive 证据包：
@@ -418,6 +454,14 @@ async function refreshAction(auth, dryRun, compactResult) {
   const calculated = await calculateHealth(auth)
   let writeResult = { profile_ids: new Map(), candidates: [] }
   if (!dryRun) writeResult = await writeHealth(auth, calculated)
+  const automaticUpdate = dryRun
+    ? {
+      status: 'dry_run',
+      auto_update_eligible_candidate_count: calculated.health.candidate_states
+        .filter((item) => item.auto_update_eligible === true).length,
+      active_model_changed: false
+    }
+    : await automaticUpdateAfterRefresh(auth, calculated)
   const result = {
     success: true,
     action: 'refresh',
@@ -426,19 +470,25 @@ async function refreshAction(auth, dryRun, compactResult) {
     subject_type: auth.subject_type,
     framework: auth.framework,
     active_snapshot_id: text(calculated.active_snapshot && calculated.active_snapshot.snapshot_id),
+    current_active_snapshot_id: text(automaticUpdate.active_snapshot_id) ||
+      text(calculated.active_snapshot && calculated.active_snapshot.snapshot_id),
     profile_count: calculated.health.profiles.length,
     open_gap_count: calculated.health.profiles.reduce((sum, item) => sum + item.evidence_gaps.length, 0),
     contradiction_pending_count: calculated.health.profiles.filter((item) => item.contradiction_status === 'pending').length,
     stagnation_pending_count: calculated.health.profiles.filter((item) => item.stagnation_status === 'pending').length,
     model_change_candidate_count: calculated.health.candidate_states.length,
     draft_eligible_candidate_count: calculated.health.candidate_states.filter((item) => item.eligible_for_draft).length,
+    auto_update_eligible_candidate_count: calculated.health.candidate_states
+      .filter((item) => item.auto_update_eligible === true).length,
+    automatic_update: automaticUpdate,
     profiles: calculated.health.profiles.map((item) => cleanProfile(item)),
     model_change_candidates: dryRun ? calculated.health.candidate_states : writeResult.candidates,
     safety: {
-      active_model_changed: false,
-      snapshot_created: false,
+      active_model_changed: automaticUpdate.active_model_changed === true,
+      snapshot_created: automaticUpdate.snapshot_created === true,
       single_evidence_can_update_model: false,
-      weak_or_insufficient_can_update_model: false
+      weak_or_insufficient_can_update_model: false,
+      history_snapshot_overwritten: false
     }
   }
 
@@ -451,13 +501,14 @@ async function refreshAction(auth, dryRun, compactResult) {
   return result
 }
 
-async function buildDraftAction(auth, dryRun) {
-  const calculated = await calculateHealth(auth)
+async function buildDraftAction(auth, dryRun, options = {}) {
+  const automatic = options.automatic === true
+  const calculated = options.calculated || await calculateHealth(auth)
   const active = calculated.active_snapshot
   if (!active) {
     return { success: false, code: 'ACTIVE_MODEL_REQUIRED', message: '尚无 active 模型，不能构建持续证据版本' }
   }
-  if (!dryRun) await writeHealth(auth, calculated)
+  if (!dryRun && options.health_written !== true) await writeHealth(auth, calculated)
 
   const existingDraftResult = await db.collection('model_snapshots').where({
     subject_id: auth.subject_id,
@@ -472,6 +523,15 @@ async function buildDraftAction(auth, dryRun) {
   }
   if (existingDraftResult.data.length === 1) {
     const existing = existingDraftResult.data[0]
+    if (automatic && text(existing.auto_update_rule_version) !== AUTO_UPDATE_RULE_VERSION) {
+      return {
+        success: false,
+        action: 'build_draft',
+        code: 'LEGACY_REVISION_DRAFT_BLOCKS_AUTO_UPDATE',
+        message: '当前 active 模型下存在旧版人工草稿，自动更新不会静默批准该草稿',
+        draft_snapshot_id: existing.snapshot_id
+      }
+    }
     return {
       success: true,
       action: 'build_draft',
@@ -480,7 +540,8 @@ async function buildDraftAction(auth, dryRun) {
       draft_created: false,
       draft_snapshot_id: existing.snapshot_id,
       model_version: existing.model_version,
-      parent_snapshot_id: active.snapshot_id
+      parent_snapshot_id: active.snapshot_id,
+      automatic
     }
   }
 
@@ -492,7 +553,10 @@ async function buildDraftAction(auth, dryRun) {
   const storedByKey = new Map(candidateRows.map((item) => [item.candidate_key, item]))
   const candidates = freshCandidates
     .map((item) => ({ ...item, ...(storedByKey.get(item.candidate_key) || {}) }))
-    .filter((item) => item.eligible_for_draft === true && item.review_status !== 'resolved_no_change')
+    .filter((item) => (
+      (automatic ? item.auto_update_eligible : item.eligible_for_draft) === true &&
+      item.review_status !== 'resolved_no_change'
+    ))
 
   if (candidates.length === 0) {
     return {
@@ -502,7 +566,9 @@ async function buildDraftAction(auth, dryRun) {
       draft_created: false,
       no_change: true,
       code: 'NO_DRAFT_ELIGIBLE_CANDIDATES',
-      message: '当前没有达到新模型草稿门槛的 Model Change Candidate'
+      message: automatic
+        ? '当前没有同时满足证据数量、独立记录、覆盖度与无矛盾门槛的自动更新候选'
+        : '当前没有达到新模型草稿门槛的 Model Change Candidate'
     }
   }
 
@@ -510,9 +576,11 @@ async function buildDraftAction(auth, dryRun) {
   if (unresolved.length) {
     return {
       success: false,
-      code: 'CONTRADICTION_REVIEW_REQUIRED',
+      code: automatic ? 'AUTO_UPDATE_BLOCKED_BY_CONTRADICTION' : 'CONTRADICTION_REVIEW_REQUIRED',
       candidate_ids: unresolved.map((item) => item.candidate_id),
-      message: '存在待解释矛盾，人工处理前不生成新模型草稿'
+      message: automatic
+        ? '存在待解释矛盾，系统将保留证据并等待后续采集，不自动改变当前模型'
+        : '存在待解释矛盾，人工处理前不生成新模型草稿'
     }
   }
 
@@ -521,7 +589,7 @@ async function buildDraftAction(auth, dryRun) {
     model: 'hy3',
     messages: [{
       role: 'user',
-      content: revisionPrompt(auth, active, candidates, calculated.health)
+      content: revisionPrompt(auth, active, candidates, calculated.health, automatic)
     }]
   })
   const output = validateRevisionOutput(
@@ -537,10 +605,20 @@ async function buildDraftAction(auth, dryRun) {
         if (candidate && candidate._id) {
           await db.collection(CANDIDATE_COLLECTION).doc(candidate._id).update({
             data: {
-              contradiction_status: 'pending',
+              contradiction_status: automatic ? 'auto_deferred' : 'pending',
               contradiction_notes: contradiction.contradiction_notes,
               eligible_for_draft: false,
-              review_status: 'blocked_by_contradiction',
+              auto_update_eligible: false,
+              auto_update_attempted_evidence_ids: automatic
+                ? candidate.supporting_evidence_ids
+                : candidate.auto_update_attempted_evidence_ids || [],
+              auto_update_last_attempted_count: automatic
+                ? Number(candidate.new_supportive_usable_count || 0)
+                : Number(candidate.auto_update_last_attempted_count || 0),
+              auto_update_contradiction_notes: automatic
+                ? contradiction.contradiction_notes
+                : text(candidate.auto_update_contradiction_notes),
+              review_status: automatic ? 'awaiting_additional_evidence' : 'blocked_by_contradiction',
               updated_at: now
             }
           })
@@ -556,7 +634,10 @@ async function buildDraftAction(auth, dryRun) {
         if (profileResult.data.length === 1) {
           await db.collection(PROFILE_COLLECTION).doc(profileResult.data[0]._id).update({
             data: {
-              contradiction_status: 'pending',
+              contradiction_status: automatic ? 'auto_deferred' : 'pending',
+              auto_update_contradiction_notes: automatic
+                ? contradiction.contradiction_notes
+                : '',
               updated_at: now
             }
           })
@@ -565,9 +646,11 @@ async function buildDraftAction(auth, dryRun) {
     }
     return {
       success: false,
-      code: 'CONTRADICTION_REVIEW_REQUIRED',
+      code: automatic ? 'AUTO_UPDATE_BLOCKED_BY_CONTRADICTION' : 'CONTRADICTION_REVIEW_REQUIRED',
       contradictions,
-      message: 'AI跨证据综合发现潜在矛盾，已停止生成草稿并等待人工解释'
+      message: automatic
+        ? '跨证据综合发现潜在矛盾，已保留证据并停止自动更新，等待后续证据'
+        : 'AI跨证据综合发现潜在矛盾，已停止生成草稿并等待人工解释'
     }
   }
 
@@ -604,9 +687,14 @@ async function buildDraftAction(auth, dryRun) {
   modelData.model_type = auth.subject_type === 'student'
     ? 'student_subject_model_revision'
     : 'teacher_subject_model_revision'
-  const supportivePairs = [...calculated.health.supportive_pairs_by_variable.values()].flat()
-  const snapshotId = makeId('MS')
   const candidateIds = candidates.map((item) => item.candidate_id).filter(Boolean)
+  const { sourceEvidenceIds, sourceAnalysisIds } = mergeRevisionSources(
+    active,
+    candidates,
+    calculated.health.supportive_pairs_by_variable
+  )
+  const automaticKey = `${auth.subject_id}|${active.snapshot_id}|${candidateIds.slice().sort().join('|')}|${sourceEvidenceIds.slice().sort().join('|')}`
+  const snapshotId = automatic ? deterministicId('MS_AUTO', automaticKey) : makeId('MS')
   const snapshot = {
     snapshot_id: snapshotId,
     subject_id: auth.subject_id,
@@ -621,16 +709,20 @@ async function buildDraftAction(auth, dryRun) {
     parent_snapshot_id: active.snapshot_id,
     source_type: 'continuous_evidence',
     model_data: modelData,
-    source_evidence_ids: unique(supportivePairs.map(({ evidence }) => evidence.evidence_id)),
-    source_analysis_ids: unique(supportivePairs.map(({ analysis }) => analysis.analysis_id)),
-    source_evidence_count: supportivePairs.length,
+    source_evidence_ids: sourceEvidenceIds,
+    source_analysis_ids: sourceAnalysisIds,
+    source_evidence_count: sourceEvidenceIds.length,
     model_change_candidate_ids: candidateIds,
     generation_method: 'ai_evidence_synthesis',
-    generation_protocol: 'subject_model_revision_v1.0',
+    generation_protocol: automatic ? 'subject_model_auto_revision_v1.0' : 'subject_model_revision_v1.0',
     model_provider: 'cloudbase',
     model_name: 'hy3',
     status: 'draft',
-    is_test: auth.subject.is_test === true
+    is_test: auth.subject.is_test === true,
+    activation_mode: automatic ? 'automatic_rule' : 'controlled_review',
+    auto_update_rule_version: automatic ? AUTO_UPDATE_RULE_VERSION : '',
+    auto_update_key: automatic ? automaticKey : '',
+    triggered_by_user_id: automatic ? auth.user.user_id : ''
   }
 
   if (dryRun) {
@@ -643,18 +735,35 @@ async function buildDraftAction(auth, dryRun) {
       parent_snapshot_id: active.snapshot_id,
       model_version: modelVersion,
       candidate_ids: candidateIds,
+      automatic,
       snapshot
     }
   }
 
   const now = db.serverDate()
-  const addResult = await db.collection('model_snapshots').add({
-    data: {
-      ...snapshot,
-      created_at: now,
-      updated_at: now
-    }
-  })
+  let addResult
+  let reusedConcurrentDraft = false
+  try {
+    addResult = await db.collection('model_snapshots').add({
+      data: {
+        ...(automatic ? { _id: snapshotId } : {}),
+        ...snapshot,
+        created_at: now,
+        updated_at: now
+      }
+    })
+  } catch (error) {
+    const concurrent = automatic
+      ? await db.collection('model_snapshots').where({
+        snapshot_id: snapshotId,
+        subject_id: auth.subject_id,
+        parent_snapshot_id: active.snapshot_id
+      }).limit(2).get()
+      : { data: [] }
+    if (concurrent.data.length !== 1) throw error
+    addResult = { _id: concurrent.data[0]._id }
+    reusedConcurrentDraft = true
+  }
   for (const candidate of candidates) {
     if (!candidate._id) continue
     await db.collection(CANDIDATE_COLLECTION).doc(candidate._id).update({
@@ -670,16 +779,100 @@ async function buildDraftAction(auth, dryRun) {
     success: true,
     action: 'build_draft',
     dry_run: false,
-    draft_created: true,
+    draft_created: !reusedConcurrentDraft,
+    reused_draft: reusedConcurrentDraft,
+    reused_concurrent_draft: reusedConcurrentDraft,
     draft_snapshot_id: snapshotId,
     database_id: addResult._id,
     parent_snapshot_id: active.snapshot_id,
     model_version: modelVersion,
     candidate_ids: candidateIds,
+    automatic,
     usage: aiResult.usage || null,
     safety: {
       active_model_changed: false,
-      human_review_required: true
+      human_review_required: !automatic,
+      automatic_activation_allowed: automatic
+    }
+  }
+}
+
+async function automaticUpdateAfterRefresh(auth, calculated) {
+  if (!calculated.active_snapshot) {
+    return {
+      status: 'waiting_for_initial_active_model',
+      active_model_changed: false,
+      snapshot_created: false,
+      rule_version: AUTO_UPDATE_RULE_VERSION
+    }
+  }
+
+  try {
+    const buildResult = await buildDraftAction(auth, false, {
+      automatic: true,
+      calculated,
+      health_written: true
+    })
+
+    if (!buildResult.success) {
+      return {
+        status: buildResult.code === 'AUTO_UPDATE_BLOCKED_BY_CONTRADICTION'
+          ? 'blocked_by_contradiction'
+          : 'failed',
+        code: buildResult.code,
+        message: buildResult.message,
+        active_model_changed: false,
+        snapshot_created: false,
+        rule_version: AUTO_UPDATE_RULE_VERSION
+      }
+    }
+    if (!buildResult.draft_snapshot_id) {
+      return {
+        status: 'waiting_for_rule_threshold',
+        code: buildResult.code || 'NO_AUTO_UPDATE_ELIGIBLE_CANDIDATES',
+        active_model_changed: false,
+        snapshot_created: false,
+        rule_version: AUTO_UPDATE_RULE_VERSION
+      }
+    }
+
+    const activation = await activateRevisionSnapshot(
+      auth,
+      buildResult.draft_snapshot_id,
+      true
+    )
+    if (!activation.success) {
+      return {
+        status: activation.code === 'AUTO_UPDATE_BLOCKED_BY_CONTRADICTION'
+          ? 'blocked_by_contradiction'
+          : 'failed',
+        code: activation.code,
+        message: activation.message,
+        draft_snapshot_id: buildResult.draft_snapshot_id,
+        active_model_changed: false,
+        snapshot_created: buildResult.draft_created === true,
+        rule_version: AUTO_UPDATE_RULE_VERSION
+      }
+    }
+
+    return {
+      status: 'updated',
+      active_model_changed: activation.already_active !== true,
+      snapshot_created: buildResult.draft_created === true,
+      previous_snapshot_id: activation.previous_snapshot_id || '',
+      active_snapshot_id: activation.snapshot_id,
+      model_version: activation.model_version,
+      rule_version: AUTO_UPDATE_RULE_VERSION
+    }
+  } catch (error) {
+    console.error('automatic subject model update error:', error)
+    return {
+      status: 'failed',
+      code: error.code || 'AUTOMATIC_MODEL_UPDATE_ERROR',
+      message: error.message || '自动模型更新失败，已保留现有模型和全部证据',
+      active_model_changed: false,
+      snapshot_created: false,
+      rule_version: AUTO_UPDATE_RULE_VERSION
     }
   }
 }
@@ -752,9 +945,30 @@ async function resolveContradictionAction(auth, event) {
   }
 }
 
-async function approveDraftAction(auth, event) {
-  const snapshotId = text(event.snapshot_id)
-  if (!snapshotId) return { success: false, code: 'SNAPSHOT_ID_REQUIRED', message: '缺少 revision draft 编号' }
+async function markCandidatesApplied(candidates, draft, auth, automatic, now) {
+  for (const candidate of candidates) {
+    await db.collection(CANDIDATE_COLLECTION).doc(candidate._id).update({
+      data: {
+        review_status: 'applied',
+        applied_snapshot_id: draft.snapshot_id,
+        application_mode: automatic ? 'automatic_rule' : 'controlled_review',
+        ...(automatic
+          ? {
+            auto_applied_at: now,
+            auto_applied_by: AUTOMATIC_ACTOR_ID,
+            auto_update_eligible: false
+          }
+          : {
+            reviewed_by_user_id: auth.user.user_id,
+            reviewed_at: now
+          }),
+        updated_at: now
+      }
+    })
+  }
+}
+
+async function activateRevisionSnapshot(auth, snapshotId, automatic = false) {
   const draftResult = await db.collection('model_snapshots').where({
     snapshot_id: snapshotId,
     subject_id: auth.subject_id,
@@ -766,8 +980,27 @@ async function approveDraftAction(auth, event) {
     return { success: false, code: 'REVISION_DRAFT_INVALID', message: 'revision draft 不存在或存在重复' }
   }
   const draft = draftResult.data[0]
+  if (automatic && text(draft.auto_update_rule_version) !== AUTO_UPDATE_RULE_VERSION) {
+    return {
+      success: false,
+      code: 'AUTO_UPDATE_DRAFT_RULE_MISMATCH',
+      message: '该草稿不是由当前自动更新规则生成，系统不会自动激活'
+    }
+  }
+  const candidates = await loadAll(CANDIDATE_COLLECTION, {
+    subject_id: auth.subject_id,
+    draft_snapshot_id: snapshotId
+  })
   if (draft.status === 'active') {
-    return { success: true, action: 'approve_draft', already_approved: true, snapshot_id: snapshotId }
+    await markCandidatesApplied(candidates, draft, auth, automatic, db.serverDate())
+    return {
+      success: true,
+      action: automatic ? 'auto_activate' : 'approve_draft',
+      already_approved: true,
+      already_active: true,
+      snapshot_id: snapshotId,
+      model_version: draft.model_version
+    }
   }
   if (draft.status !== 'draft') {
     return { success: false, code: 'SNAPSHOT_NOT_DRAFT', message: '模型快照不是 draft 状态' }
@@ -780,17 +1013,16 @@ async function approveDraftAction(auth, event) {
       message: 'draft 的父版本已不是当前 active 模型，必须重新生成候选'
     }
   }
-  const candidates = await loadAll(CANDIDATE_COLLECTION, {
-    subject_id: auth.subject_id,
-    draft_snapshot_id: snapshotId
-  })
   if (candidates.some((item) => item.contradiction_status === 'pending')) {
     return {
       success: false,
-      code: 'CONTRADICTION_REVIEW_REQUIRED',
-      message: '仍有待解释矛盾，不能批准新模型版本'
+      code: automatic ? 'AUTO_UPDATE_BLOCKED_BY_CONTRADICTION' : 'CONTRADICTION_REVIEW_REQUIRED',
+      message: automatic
+        ? '仍有待解释矛盾，系统保留当前 active 模型并等待后续证据'
+        : '仍有待解释矛盾，不能批准新模型版本'
     }
   }
+  validateSnapshotFramework(draft, variablesFor(auth.framework))
   const subjectResult = await db.collection('subjects').where({
     subject_id: auth.subject_id,
     subject_type: auth.subject_type
@@ -812,8 +1044,19 @@ async function approveDraftAction(auth, event) {
     await transaction.collection('model_snapshots').doc(draft._id).update({
       data: {
         status: 'active',
-        approved_at: now,
-        approved_by_user_id: auth.user.user_id,
+        activated_at: now,
+        activation_mode: automatic ? 'automatic_rule' : 'controlled_review',
+        ...(automatic
+          ? {
+            auto_activated_at: now,
+            auto_activated_by: AUTOMATIC_ACTOR_ID,
+            auto_update_rule_version: AUTO_UPDATE_RULE_VERSION,
+            triggered_by_user_id: text(draft.triggered_by_user_id) || auth.user.user_id
+          }
+          : {
+            approved_at: now,
+            approved_by_user_id: auth.user.user_id
+          }),
         updated_at: now
       }
     })
@@ -825,26 +1068,24 @@ async function approveDraftAction(auth, event) {
       }
     })
   })
-  for (const candidate of candidates) {
-    await db.collection(CANDIDATE_COLLECTION).doc(candidate._id).update({
-      data: {
-        review_status: 'applied',
-        applied_snapshot_id: draft.snapshot_id,
-        reviewed_by_user_id: auth.user.user_id,
-        reviewed_at: now,
-        updated_at: now
-      }
-    })
-  }
+  await markCandidatesApplied(candidates, draft, auth, automatic, now)
   return {
     success: true,
-    action: 'approve_draft',
+    action: automatic ? 'auto_activate' : 'approve_draft',
     already_approved: false,
-    approved: true,
+    approved: !automatic,
+    auto_activated: automatic,
     previous_snapshot_id: active.snapshot_id,
     snapshot_id: draft.snapshot_id,
-    model_version: draft.model_version
+    model_version: draft.model_version,
+    auto_update_rule_version: automatic ? AUTO_UPDATE_RULE_VERSION : ''
   }
+}
+
+async function approveDraftAction(auth, event) {
+  const snapshotId = text(event.snapshot_id)
+  if (!snapshotId) return { success: false, code: 'SNAPSHOT_ID_REQUIRED', message: '缺少 revision draft 编号' }
+  return activateRevisionSnapshot(auth, snapshotId, false)
 }
 
 async function statusAction(auth) {
@@ -868,7 +1109,15 @@ async function statusAction(auth) {
     active_snapshot_id: text(active && active.snapshot_id),
     profile_count: profiles.length,
     open_gap_count: profiles.reduce((sum, item) => sum + (Array.isArray(item.evidence_gaps) ? item.evidence_gaps.length : 0), 0),
-    pending_candidate_count: candidates.filter((item) => ['pending_review', 'draft_created', 'blocked_by_contradiction'].includes(item.review_status)).length,
+    pending_candidate_count: candidates.filter((item) => (
+      ['pending_review', 'draft_created', 'blocked_by_contradiction', 'awaiting_additional_evidence']
+        .includes(item.review_status)
+    )).length,
+    auto_update_rule_version: AUTO_UPDATE_RULE_VERSION,
+    auto_update_eligible_candidate_count: candidates.filter((item) => item.auto_update_eligible === true).length,
+    auto_update_waiting_for_more_evidence_count: candidates.filter((item) => (
+      text(item.review_status) === 'awaiting_additional_evidence'
+    )).length,
     draft_snapshot_ids: drafts.map((item) => item.snapshot_id)
   }
 }
@@ -916,7 +1165,9 @@ exports.main = async (event = {}) => {
 // Exported only for local static/rule tests. Cloud calls still use exports.main.
 exports.__test__ = {
   activeStatus,
+  deterministicId,
   nextRevision,
+  validateSnapshotFramework,
   validateRevisionOutput,
   variablesFor
 }

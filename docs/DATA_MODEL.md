@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-最近一次已上传开发版为 `1.0.7`。Teacher / Student 统一绑定协议、持续证据健康与受控模型 revision 主链已经进入开发环境；`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
+最近一次已上传开发版为 `1.0.7`。Teacher / Student 统一绑定协议、持续证据健康与受控模型 revision 主链已经进入开发环境；规则驱动自动 revision V1.0 已在本地完成、尚未部署。`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -129,11 +129,11 @@ Evidence Analysis 不直接生成主体模型结论。
 
 后续模型变化必须创建新 snapshot，不修改旧版本。
 
-持续采集页面不直接写 model_snapshots，也不更新 active Student-M0 / Teacher-T0。达到 Candidate 门槛后，受控研究调用才可创建 revision draft。revision snapshot 继续复用 model_snapshots，新增/使用字段：snapshot_type = revision、model_type = continuous_revision、parent_snapshot_id、source_candidate_ids[]、source_evidence_ids[]、source_analysis_ids[]、version / model_version、generation_protocol = subject_model_revision_v1.0、status = draft、approved_at、approved_by_user_id。人工批准后旧 active 置为 superseded，新 draft 置为 active，并更新 Subject 当前版本指针；旧 snapshot 内容不覆盖。
+持续采集页面不直接写 model_snapshots，也不原地更新 active Student-M0 / Teacher-T0。页面只调用 `advanceSubjectModel(refresh)`；本地 V1.0 达到自动门槛后由云函数内部创建并激活 revision snapshot。revision snapshot 继续复用 model_snapshots，新增/使用字段：snapshot_type = revision、model_type = revision、parent_snapshot_id、model_change_candidate_ids[]、source_evidence_ids[]、source_analysis_ids[]、version / model_version、generation_protocol = subject_model_auto_revision_v1.0、activation_mode = automatic_rule、auto_update_rule_version = subject_model_auto_update_v1.0、auto_update_key、triggered_by_user_id、activated_at、auto_activated_at、auto_activated_by、status = active。自动激活事务把旧 active 置为 superseded，并更新 Subject 当前版本指针；旧 snapshot 内容不覆盖。历史受控 draft 仍可保留 `generation_protocol = subject_model_revision_v1.0`、approved_at 与 approved_by_user_id。
 
 `getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示和 `construction_progress`；提示和进度结果不属于模型事实，实际新语音仍需内容路由、Evidence Analysis 和后续人工复核。
 
-`construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度或人工审批门槛。
+`construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度、首次模型审批或持续模型自动更新门槛。
 
 ## 20. variable_evidence_profiles
 状态：已在 `model-dev-d9gkoyaolb464c28d` 创建并设为 ADMINONLY，已由 `advanceSubjectModel` 对真实教师 13 个变量和 TEST Student 17 个变量完成首次全量重建。唯一业务键为 `subject_id + framework + variable_id`；代码遇到重复 Profile 时停止，不随机更新。
@@ -169,11 +169,11 @@ status：pending / shown / completed / skipped。
 
 用途：保存新证据可能引起的模型变化候选。
 
-当前字段：candidate_key、candidate_id、subject_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、current_snapshot_id、change_type、old_state、candidate_state、supporting_evidence_ids[]、supporting_analysis_ids[]、new_supportive_usable_count、eligible_for_draft、contradiction_status、contradiction_resolution、context_changes[]、reasoning_basis、profile_id、review_status、draft_snapshot_id、applied_snapshot_id、created_at、updated_at。
+当前字段：candidate_key、candidate_id、subject_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、current_snapshot_id、change_type、old_state、candidate_state、supporting_evidence_ids[]、supporting_analysis_ids[]、new_supportive_usable_count、eligible_for_draft、auto_update_eligible、auto_update_rule_version、auto_update_blockers[]、independent_source_record_count、new_time_point_count、new_context_count、new_source_type_count、auto_update_attempted_evidence_ids[]、auto_update_last_attempted_count、auto_update_contradiction_notes、contradiction_status、contradiction_resolution、context_changes[]、reasoning_basis、profile_id、review_status、draft_snapshot_id、applied_snapshot_id、application_mode、auto_applied_at、auto_applied_by、created_at、updated_at。
 
 change_type：content_update / support_strengthening / context_refinement / contradiction_pending / no_change。
 
-`candidate_key` 由 subject + framework + variable + current active snapshot 构成。同一变量必须至少有 2 条 active snapshot 之后新增的 continuous supportive usable Evidence，且 contradiction_status != pending，才可 `eligible_for_draft = true`。review_status 支持 pending_review、blocked_by_contradiction、draft_created、applied、resolved_no_change。单条 Evidence、weak、irrelevant、uncertain、insufficient 都不能直接生成 draft 或改 active snapshot。
+`candidate_key` 由 subject + framework + variable + current active snapshot 构成。`eligible_for_draft` 继续表达旧受控草稿数量门槛；正式自动更新使用更严格的 `auto_update_eligible`：同一变量至少 2 条 active snapshot 之后新增的 continuous supportive usable Evidence、至少 2 个独立原始记录、跨日/跨精确 context/跨 source type 至少一项达到 2，且 contradiction_status != pending。review_status 兼容 pending_review、blocked_by_contradiction、awaiting_additional_evidence、draft_created、applied、resolved_no_change。AI 发现无法解释的矛盾时保存本次 attempted evidence IDs；同一批证据不重复尝试，新增 supportive usable Evidence 后才重新评估。单条 Evidence、weak、irrelevant、uncertain、insufficient、同源重复和覆盖不足都不能改 active snapshot。
 
 ## 24. media_records（后续）
 状态：尚未创建。

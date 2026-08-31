@@ -65,6 +65,7 @@ const FRAMEWORKS = {
 
 const SUPPORTIVE_RELEVANCE = new Set(['relevant', 'partially_relevant'])
 const SUPPORTIVE_SUFFICIENCY = new Set(['usable', 'weak'])
+const AUTO_UPDATE_RULE_VERSION = 'subject_model_auto_update_v1.0'
 const INVALID_STATUSES = new Set([
   'deleted',
   'invalid',
@@ -296,6 +297,46 @@ function isContinuous(evidence) {
       .includes(source)
 }
 
+function sourceRecordKey(evidence) {
+  if (!evidence) return ''
+  const typedIds = [
+    ['continuous', evidence.continuous_record_id],
+    ['voice', evidence.voice_id],
+    ['message', evidence.message_id],
+    ['session', evidence.session_id]
+  ]
+  const found = typedIds.find(([, value]) => text(value))
+  return found ? `${found[0]}:${text(found[1])}` : ''
+}
+
+function autoUpdateRule(newContinuousUsable, contradictionStatus) {
+  const evidenceCount = newContinuousUsable.length
+  const recordCount = unique(newContinuousUsable.map(({ evidence }) => sourceRecordKey(evidence))).length
+  const timePointCount = unique(newContinuousUsable.map(({ evidence, analysis }) => (
+    chinaDate(recordTime(evidence) || recordTime(analysis))
+  ))).length
+  const contextCount = unique(newContinuousUsable.flatMap(({ analysis }) => contexts(analysis))).length
+  const sourceTypeCount = unique(newContinuousUsable.map(({ evidence }) => evidence.source_type)).length
+  const hasCoverage = timePointCount >= 2 || contextCount >= 2 || sourceTypeCount >= 2
+  const blockers = []
+
+  if (evidenceCount < 2) blockers.push('new_supportive_usable_count_below_2')
+  if (recordCount < 2) blockers.push('independent_source_record_count_below_2')
+  if (!hasCoverage) blockers.push('cross_time_context_or_source_coverage_missing')
+  if (contradictionStatus === 'pending') blockers.push('contradiction_pending')
+
+  return {
+    rule_version: AUTO_UPDATE_RULE_VERSION,
+    eligible: blockers.length === 0,
+    blockers,
+    new_supportive_usable_count: evidenceCount,
+    independent_source_record_count: recordCount,
+    new_time_point_count: timePointCount,
+    new_context_count: contextCount,
+    new_source_type_count: sourceTypeCount
+  }
+}
+
 function buildHealthState({
   subjectId,
   subjectType,
@@ -447,6 +488,8 @@ function buildHealthState({
     ))
     if (newContinuousUsable.length === 0) continue
 
+    const automaticRule = autoUpdateRule(newContinuousUsable, contradictionStatus)
+
     const currentVariable = modelVariable(currentSnapshot, variable.variable_id)
     const currentContexts = unique(list(currentVariable && currentVariable.contexts))
     const newContexts = unique(newContinuousUsable.flatMap((item) => contexts(item.analysis)))
@@ -473,6 +516,13 @@ function buildHealthState({
       supporting_analysis_ids: newContinuousUsable.map((item) => text(item.analysis.analysis_id)),
       new_supportive_usable_count: newContinuousUsable.length,
       eligible_for_draft: newContinuousUsable.length >= 2 && contradictionStatus !== 'pending',
+      auto_update_eligible: automaticRule.eligible,
+      auto_update_rule_version: automaticRule.rule_version,
+      auto_update_blockers: automaticRule.blockers,
+      independent_source_record_count: automaticRule.independent_source_record_count,
+      new_time_point_count: automaticRule.new_time_point_count,
+      new_context_count: automaticRule.new_context_count,
+      new_source_type_count: automaticRule.new_source_type_count,
       contradiction_status: contradictionStatus,
       review_status: contradictionStatus === 'pending' ? 'blocked_by_contradiction' : 'pending_review',
       reasoning_basis: newContinuousUsable.flatMap((item) => item.analysis.extracted_points).slice(0, 12),
@@ -492,8 +542,10 @@ function buildHealthState({
 }
 
 module.exports = {
+  AUTO_UPDATE_RULE_VERSION,
   FRAMEWORKS,
   active,
+  autoUpdateRule,
   buildHealthState,
   chinaDate,
   dateValue,
