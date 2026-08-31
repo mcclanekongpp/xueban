@@ -1,12 +1,12 @@
 # 数据采集小程序整体说明与模拟课堂路线对照
 
-> 文档版本：V1.2
+> 文档版本：V1.3
 >
 > 核对日期：2026-08-31
 >
 > 核对依据：当前本地代码、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`
 >
-> 当前候选版本：微信小程序开发版 `1.0.7`（已上传，尚未提交审核或正式发布；本地自动 revision 改动尚未进入该版本）
+> 当前候选版本：微信小程序开发版 `1.0.8`（已于 2026-08-31 12:35:40 CST 上传；尚未提交审核或正式发布）
 
 ## 1. 文档目的
 
@@ -74,7 +74,7 @@
 - 学生“再说一说”持续采集；
 - 持续语音内容对固定变量的 0—5 项路由；
 - 持续 Evidence 的 Profile / Gap / Contradiction / Stagnation / Model Change Candidate 派生链；
-- 持续 revision 的统一门槛判断、自动生成与自动激活（本地完成，待部署验证）；
+- 持续 revision 的统一门槛判断、自动生成与自动激活（已部署并完成云端 TEST 验证）；
 - 后续补充对话建议；
 - 模型构建覆盖进度与雷达图；
 - 数据库、原始音频、Evidence / Analysis、Model Snapshot 和源码的本地加密全量备份。
@@ -85,7 +85,7 @@
 - 固定人格标签、心理诊断或学业诊断；
 - 单条 Evidence 直接改写主体模型；
 - 不满足数量、独立记录、覆盖度和无矛盾门槛仍强制更新模型；
-- 自动审批模型；
+- 首次模型自动审批（Teacher-T0 / Student-M0 仍保留人工审核）；
 - 图片、视频和自动行为识别；
 - 双主体自动互动；
 - 完整课堂事件引擎；
@@ -491,7 +491,7 @@ Profile 每次完整重算，不做 `usable_count += 1`。来源、模态、日�
 
 当前内嵌 Gap 类型包括：`no_evidence`、`insufficient_detail`、`single_time_point`、`single_context`、`single_source`、`stale_evidence`、`contradiction_pending`。Stagnation 只提示重复无 supportive、长期 weak、时间/情境重复或 60 天无 supportive 更新，不评价主体能力。
 
-Model Change Candidate 只使用 current active snapshot 之后新增的 continuous supportive usable Evidence。同一变量至少 2 条，且 `contradiction_status != pending`，才可 `eligible_for_draft = true`。本地自动更新还会继续执行更严格的独立记录与覆盖度校验：
+Model Change Candidate 只使用 current active snapshot 之后新增的 continuous supportive usable Evidence。同一变量至少 2 条，且 `contradiction_status != pending`，才可 `eligible_for_draft = true`。已部署的自动更新 V1.0 还会继续执行更严格的独立记录与覆盖度校验：
 
 ```text
 统一自动门槛
@@ -502,6 +502,39 @@ Model Change Candidate 只使用 current active snapshot 之后新增的 continu
 ```
 
 普通 Teacher / Guardian 页面只能触发 refresh，不能指定候选、降低门槛或直接改写 snapshot。自动更新要求同一变量至少 2 条新的 supportive usable continuous Evidence、至少 2 个独立原始记录、跨日/跨情境/跨来源至少一项覆盖，并且无 pending contradiction。单条 Evidence、weak、irrelevant、uncertain、insufficient、同源重复或覆盖不足都不能生成新版本。
+
+规则引擎不把“采集数量”当作模型质量，其技术门槛如下：
+
+| 校验层 | 统一规则 | 不通过时的行为 |
+|---|---|---|
+| Analysis | `relevance_status = relevant / partially_relevant` 且 `evidence_sufficiency = usable` | 只保留 Evidence / Analysis，不进入自动 revision |
+| 数量 | 同一变量至少 2 条 active snapshot 之后的新 continuous Evidence | Candidate 保留为待积累 |
+| 独立记录 | 至少 2 个不同 `continuous_record_id / voice_id / message_id / session_id` | 同一原始记录路由成多条 Evidence 不能凑门槛 |
+| 覆盖 | 中国标准时间自然日、精确去重 context、source type 中至少一项达到 2 | 只记录 blocker，不降低证据门槛 |
+| 矛盾 | `contradiction_status != pending` | 进入 `awaiting_additional_evidence`，同一批证据不反复请求 AI |
+| AI 综合 | 只读正式 Evidence Analysis 和当前完整 snapshot，只允许返回候选变量 | 输出越界、缺少变量或概览超 100 字时拒绝激活 |
+| 框架 | Teacher 必须保留 13 变量，Student 必须保留 17 变量 | 不允许丢变量、增 T6 / S7 或生成分数/排名/诊断 |
+| 版本 | 新快照使用确定性 `auto_update_key` 和 snapshot ID | 重复 refresh 复用同一结果，不新增第二版 |
+| 激活 | 事务内把父 snapshot 转 `superseded`，新 snapshot 转 `active`，更新 Subject 指针 | 失败时保留原 active 和所有原始记录 |
+
+实现上，`advanceSubjectModel(refresh)` 每次从全部 active Evidence 和每条 Evidence 最新且身份字段一致的 active Analysis 重算，不使用 `usable_count += 1` 之类增量累加。它先幂等 upsert `variable_evidence_profiles` 和 `model_change_candidates`，再对 `auto_update_eligible = true` 的 Candidate 执行 `subject_model_auto_revision_v1.0` 综合。新 snapshot 记录 `parent_snapshot_id`、`model_change_candidate_ids`、新旧 Evidence / Analysis 引用、`activation_mode = automatic_rule`、`auto_update_rule_version = subject_model_auto_update_v1.0` 和自动激活时间；旧 snapshot 内容永不覆盖。
+
+### 10.7.1 2026-08-31 云端自动激活实测
+
+本次只对 `is_test = true` 的 TEST Student `S_MTB6OGNQ_4F4DD` 写入两条 S3-2 技术验证记录，它们分别具有独立 `continuous_record_id`、不同 context、`relevant + usable`、`test_source = automatic_revision_validation`。测试不伪造语音文件，不修改真人教师或学生数据。
+
+| 核验项 | 云端结果 |
+|---|---|
+| Candidate | `MCC_MTGPFSO5_HMTYQ7`，`new_supportive_usable_count = 2`，独立记录 2，context 2，`auto_update_eligible = true` |
+| 新 snapshot | `MS_AUTO_964A2C6C7C1C4C278E187881`，Student `1.1`，`active` |
+| 父 snapshot | `MS_MTBMDOF7_0MNQU`，Student `1.0`，保留为 `superseded` |
+| 框架完整性 | S1—S6 全部 6 个一级维度、17 个二级变量均存在 |
+| S3-2 | 状态更新为“已有一定支持”，描述综合旧证据与两个 TEST 情境，并明示 TEST 边界与不确定性 |
+| 引用完整性 | 新 snapshot 保留 17 条原始引用，增加 2 条 TEST Evidence / Analysis，合计 19 条 |
+| 幂等 | 第二次 refresh 返回 `NO_DRAFT_ELIGIBLE_CANDIDATES`，`snapshot_created = false`，版本仍为 1.1 |
+| 教师隔离 | 真实 Teacher active snapshot 仍为 `MS_MT873ZQI_9PEUL` |
+
+该实测证明云端技术链可用，不代表 TEST 文本具有真实研究结论效力。真人试采仍必须由真实语音、正式 ASR、内容路由和 Evidence Analysis 形成新证据。
 
 ### 10.8 模型页面信息结构
 
@@ -849,18 +882,16 @@ Model Snapshot
 | Student-M0 draft / Human Review / active | 已完成 TEST 闭环 |
 | Student Continuous | 已完成真机录音、路由、Evidence 和 Analysis 验证 |
 | Evidence Health / Candidate | 已完成 Teacher 13 + Student 17 Profile 和 5 条 Candidate 实测 |
-| 规则驱动自动 revision | 本地规则、结构、幂等和编译回归通过；尚未部署及完成云端自动激活验证 |
+| 规则驱动自动 revision | 已部署；TEST Student `1.0 → 1.1` 自动激活、旧版保留和重复 refresh 幂等通过 |
 | 模型构建进度/雷达图 | 已完成，只读运行时计算 |
 | 后续补充对话提醒 | 已完成，只读运行时计算 |
-| 微信开发版本 | `1.0.7` 已上传 |
+| 微信开发版本 | `1.0.8` 已上传，代码包 816025 bytes |
 | 微信审核 | 尚未提交 |
 | 正式发布 | 尚未发布 |
 
 当前已验证数据不应被理解为正式研究效果结论；TEST Student 的 active 模型只证明技术链路可用。
 
-Evidence Health 当前真实回归基线：教师 13 个 Profile、27 个 open Gap、4 个 pending Candidate，其中 1 个达到 draft 门槛；TEST Student 17 个 Profile、41 个 open Gap、1 个 pending Candidate，未达到门槛。数据面共 30 个唯一 Profile 和 5 个唯一 Candidate，无重复；Teacher active snapshot `MS_MT873ZQI_9PEUL`、Student active snapshot `MS_MTBMDOF7_0MNQU` 均未改变。
-
-另以 2 条临时 TEST supportive usable continuous Evidence 完成正向门槛验证：`build_draft(dry_run=true)` 返回 `would_create = true`，生成 Student-M1 / version 1.1 草稿预案，但 `draft_created = false`，预案 snapshot 未落库；临时 2 条 Evidence 与 2 条 Analysis 已精确删除。
+Evidence Health 的云端基线在自动激活前为 30 个固定变量 Profile（Teacher 13 + Student 17）。本次新增 2 条明确 TEST Evidence 与 2 条 TEST Analysis，并保留作为自动 revision 追溯基线；Student active snapshot 已从 `MS_MTBMDOF7_0MNQU` 更新为 `MS_AUTO_964A2C6C7C1C4C278E187881`，教师 active snapshot `MS_MT873ZQI_9PEUL` 未变。
 
 ## 17. 对模拟课堂整体构建的贡献
 
@@ -935,7 +966,7 @@ Evidence Health 当前真实回归基线：教师 13 个 Profile、27 个 open G
 
 ## 19. 持续证据健康与版本机制在整体路线中的位置
 
-以下主链中的 Evidence → Candidate 已进入正式持续采集派生流程；自动 revision 部分已在本地完成、尚待部署：
+以下主链已进入开发环境的 Teacher / Student 持续采集派生流程，自动 revision 已完成云端 TEST 激活验证：
 
 ```text
 Evidence
@@ -948,7 +979,7 @@ Evidence
   → New Model Snapshot
 ```
 
-`advanceSubjectModel(refresh)` 已负责 Profile、内嵌 Gap、Contradiction、Stagnation 与 Candidate；`getSubjectModelGuidance` 仍只提供只读补充提示和构建进度。Targeted Supplement 状态机和 Unmatched 自动聚类继续暂停。本地自动更新还要求至少两个独立原始记录及跨日/情境/来源覆盖；通过 AI 综合与完整框架校验后自动激活新 snapshot。矛盾或门槛不足时不更新。
+`advanceSubjectModel(refresh)` 已负责 Profile、内嵌 Gap、Contradiction、Stagnation 与 Candidate；`getSubjectModelGuidance` 仍只提供只读补充提示和构建进度。Targeted Supplement 状态机和 Unmatched 自动聚类继续暂停。已部署的自动更新要求至少两个独立原始记录及跨日/情境/来源覆盖；通过 AI 综合与完整框架校验后自动激活新 snapshot。矛盾或门槛不足时不更新。
 
 ## 20. 当前总体完成度判断
 
@@ -962,6 +993,7 @@ Evidence
 - Teacher / Student Continuous Collection；
 - Teacher / Student Evidence Profile、Gap、Stagnation 与 Model Change Candidate；
 - 受控持续证据 revision draft / approval 接口及权限边界；
+- 规则驱动自动 revision、确定性 snapshot、自动激活与重复 refresh 幂等；
 - URL ASR、批量 Analysis 与异步健康层性能优化；
 - 构建进度、雷达图和补充对话提醒；
 - 本地加密全量备份。
@@ -975,7 +1007,6 @@ Evidence
 - 独立 Teacher / Student continuous submit 旧端点；
 - TEST 技术辅助函数；
 - 单变量 Evidence Profile 诊断兼容函数。
-- 规则驱动自动 revision、确定性 snapshot 与自动激活（本地完成，待云端验证）。
 
 ### 只有设计或当前暂停
 
@@ -996,13 +1027,11 @@ Evidence
 
 在不扩大研究架构的前提下，近期顺序应是：
 
-1. 部署并用 TEST 持续证据验证规则驱动自动 revision；
-2. 生成并上传包含自动更新状态展示的新候选版本；
-3. 完成微信公众平台隐私保护指引核对并提交新版本审核；
-4. 用全新微信账号完成教师正确绑定烟雾测试；
-5. 组织真人教师、家长和学生试采；
-6. 根据真实语音、ASR、交互负担和自动 revision 质量修复阻断问题；
-7. 形成主体复现的验证方案后，再进入阶段2。
+1. 完成微信公众平台隐私保护指引核对并提交 `1.0.8` 审核；
+2. 用全新微信账号完成教师正确绑定烟雾测试；
+3. 组织真人教师、家长和学生试采；
+4. 根据真实语音、ASR、交互负担和自动 revision 质量修复阻断问题；
+5. 形成主体复现的验证方案后，再进入阶段2。
 
 ## 22. 关键代码位置
 
@@ -1034,4 +1063,4 @@ Evidence
 
 ## 23. 一句话总结
 
-当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 初始 draft → Human Review → active Model Snapshot → 持续 Evidence Health → Model Change Candidate”的 Teacher / Student 主体表征基础链；本地已增加“统一门槛 → 自动 revision snapshot → 自动 active”，但尚待部署和真实云端验证。它已经具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。
+当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 初始 draft → Human Review → active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 统一门槛 → 自动 revision snapshot → 自动 active”的 Teacher / Student 主体表征基础链。自动 revision 已用 TEST Student 完成云端激活和幂等验证；它不会让单条或低质量证据直接改模型。系统已具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。

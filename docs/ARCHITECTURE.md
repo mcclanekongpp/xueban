@@ -2,9 +2,9 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已在本地完成静态与规则回归，尚待部署验证。小程序开发版 `1.0.7` 已上传；它仍是半自动 revision 版本，不包含本地自动更新改动。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 验证新 revision 自动激活、旧 snapshot 保留和重复 refresh 幂等。小程序开发候选版 `1.0.8` 已上传。
 
-Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。本地自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
+Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。已部署的自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
 ## 0.1 Teacher / Student Subject Binding V1.0
 
@@ -165,7 +165,7 @@ AI 综合输出还必须通过 100 字概览、候选变量精确匹配和固定
 - 普通 Guardian 不直接访问数据库，只能读取本人 active binding 对应的安全 Student-M0 摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash` 或 `bind_code_hash`。所有学生采集授权继续以当前 user 的 active `guardian_student_bindings` 为边界。
 - 教师首页持续采集只保留 `teaching_reflection` 与 `student_observation` 两个正式入口；`free_dialogue` 只作历史数据和旧链接兼容。重复的泛化语音入口和未开发的记录中心不进入正式页面。Teacher Record Center 作为非阻断 TODO 保留。
 - 教师/学生逐项采集采用一致的页面宽度、进度、任务卡、录音、提交与状态反馈结构；教师/学生模型采用一致的总体概览、构建进度雷达图、版本状态、一级维度、二级变量、四级状态标签、当前描述与可选不确定性结构。学生采集文案继续保持儿童友好，不显示技术术语；构建进度明确标注为覆盖指标而非能力或质量评价。
-- 微信小程序开发版本 `1.0.7` 已上传，包含持续证据健康与受控 revision 主链、URL ASR、批量 Analysis 和异步派生层优化。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
+- 微信小程序开发候选版 `1.0.8` 已上传，包含已云端验证的规则驱动自动 revision 状态展示。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
 
 ## 0.7 全量备份与恢复边界
 

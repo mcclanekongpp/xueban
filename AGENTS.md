@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。Teacher / Student 统一绑定协议已建立：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链已在本地完成，等待部署验证；语音性能优化已进入开发环境。全量备份工具 V1.0 已建立并完成首次加密全量备份。小程序开发版 `1.0.7` 已于 2026-08-31 上传；尚未提交微信审核或正式发布，且尚不包含本地自动 revision 改动。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。Teacher / Student 统一绑定协议已建立：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成 `1.0 → 1.1` 云端自动激活与重复 refresh 幂等验证；语音性能优化已进入开发环境。全量备份工具 V1.0 已建立并完成首次加密全量备份。小程序开发候选版 `1.0.8` 已于 2026-08-31 上传；尚未提交微信审核或正式发布。
 
 ## 五阶段路线
 1. 主体表征
@@ -177,7 +177,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
 - 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
-- 版本 `1.0.7` 是最近一次已上传开发版本，包含持续证据健康与半自动模型 revision 主链，并优化 URL ASR、批量 Analysis 和异步派生层。本地已把持续 revision 改为统一规则自动更新，但尚未部署或进入新的小程序候选版本。微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
+- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.8` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
 
 ## 数据与隐私原则
 1. 身份信息与研究主体信息分离。
@@ -205,16 +205,17 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 4. Student Continuous Collection V1.0（已完成）
 5. 主体刻画综合协议、后续补充对话提醒与模型构建进度（已完成并进入 `1.0.6`）
 6. Teacher / Student 统一绑定协议（集合、主要函数、页面与安全回归已完成并进入 `1.0.6`）
-7. 真人试采候选版本 `1.0.7` 上传（已完成）
+7. 真人试采候选版本 `1.0.7` 上传（已完成，已被后续候选版替代）
 8. 微信平台隐私核对、审核与发布
 9. 组织真人教师和学生主体模型采集测试
 10. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
 11. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
-12. 规则驱动持续模型自动更新（本地完成，待部署并用 TEST / 真人持续证据验证）
-13. 主体复现
-14. 双主体互动
-15. 模拟课堂
-16. 实验验证
+12. 规则驱动持续模型自动更新（已部署，已用 TEST Student 完成云端自动激活与幂等验证）
+13. 小程序开发候选版 `1.0.8` 上传（已完成）
+14. 主体复现
+15. 双主体互动
+16. 模拟课堂
+17. 实验验证
 
 ## 当前暂停项
 - Targeted Supplement
@@ -222,7 +223,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 图片 / 视频等复杂多模态
 - Student-M2 及长期演化策略
 
-Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。Evidence Profile、Profile 内 Gap、矛盾/停滞状态与 Model Change Candidate 已进入持续采集派生链；本地 V1.0 在严格自动门槛满足时创建并激活新的 revision snapshot，未达门槛或矛盾 pending 时只保留证据与候选。当前学生 MVP 以语音为主，允许必要的人工观察文本或结构化记录，同时保持 Evidence 底层的模态无关性。
+Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。Evidence Profile、Profile 内 Gap、矛盾/停滞状态与 Model Change Candidate 已进入持续采集派生链；已部署的 V1.0 在严格自动门槛满足时创建并激活新的 revision snapshot，未达门槛或矛盾 pending 时只保留证据与候选。当前学生 MVP 以语音为主，允许必要的人工观察文本或结构化记录，同时保持 Evidence 底层的模态无关性。
 
 ## Codex 工作规则
 1. 修改代码前先阅读 `AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`。

@@ -5,11 +5,11 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.7` 已上传为微信小程序开发版本，包含持续证据健康、受控模型 revision 主链和语音/分析性能优化；尚未提交审核或正式发布。本地已进一步完成规则驱动自动 revision V1.0，但尚未部署，因此云端 `1.0.7` 当前仍需要受控 build / approve。
+真人试采开发版 `1.0.7` 已上传，但已被规则驱动自动 revision 候选版 `1.0.8` 替代。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。微信审核与正式发布状态仍必须以平台实际为准。
 
-当前最高优先级：**先部署并用 TEST 持续证据验证规则驱动自动 revision，再生成新的候选版本；不能把尚未部署的本地机制写成 `1.0.7` 已具备能力**。
+当前最高优先级：**完成隐私保护指引核对后提交 `1.0.8` 审核；继续用真人试采验证自动 revision 的证据质量和节奏**。
 
-## 持续模型规则驱动自动更新 V1.0（本地完成，待部署）
+## 持续模型规则驱动自动更新 V1.0（已部署并完成云端 TEST 验证）
 
 - [x] Teacher / Student 共用 `advanceSubjectModel(refresh)`，普通持续采集完成 Analysis 后自动进入同一规则链
 - [x] 自动数量门槛：同一变量至少 2 条 active snapshot 之后新增的 continuous supportive usable Evidence
@@ -24,9 +24,27 @@
 - [x] 自动版本记录 `activation_mode = automatic_rule`、规则版本、触发 user 和候选/证据/分析引用；页面状态显示“规则自动更新”
 - [x] 自动更新失败时 `refresh` 仍保留已保存的 Voice / Message / Evidence / Analysis / Profile / Candidate 和原 active 模型
 - [x] 68 个 JavaScript、102 个 JSON 与 Evidence Health/自动门槛规则测试通过；开发者工具 refresh、模型页和持续采集页编译通过，Console / Network 无错误
-- [ ] `advanceSubjectModel`、`getTeacherCurrentModel`、`getStudentCurrentModel` 尚未部署
-- [ ] 尚未用 TEST Student / Teacher 新持续证据完成云端自动 snapshot 激活验证
-- [ ] 尚未上传包含状态展示改动的新小程序版本；最近上传版本仍为 `1.0.7`
+- [x] `advanceSubjectModel` 完整部署成功，运行时 Node.js 16.13，timeout = 120 秒
+- [x] TEST Student `S_MTB6OGNQ_4F4DD` 在 S3-2 写入 2 条独立、不同 context、`is_test = true` 的 supportive usable 持续 Evidence / Analysis
+- [x] 云端自动创建并激活 `MS_AUTO_964A2C6C7C1C4C278E187881`，Student 版本从 `1.0` 进至 `1.1`
+- [x] 新 snapshot 为 `activation_mode = automatic_rule`、`generation_protocol = subject_model_auto_revision_v1.0`，包含 S1—S6 全部 17 变量
+- [x] 旧 `MS_MTBMDOF7_0MNQU` 保留为 `superseded`，新 snapshot 保留父快照指针和 19 条 Evidence / Analysis 引用
+- [x] Candidate `MCC_MTGPFSO5_HMTYQ7` 为 `applied / automatic_rule`；重复 refresh 返回 `NO_DRAFT_ELIGIBLE_CANDIDATES`，未创建第二个 snapshot
+- [x] 正式教师 active snapshot 仍为 `MS_MT873ZQI_9PEUL`，本次 TEST 没有修改教师 Evidence / Analysis / Snapshot
+- [x] 小程序 `1.0.8` 已于 2026-08-31 12:35:40 CST 上传为开发候选版，代码包 816025 bytes
+
+## 真人试采候选版本 1.0.8（2026-08-31）
+
+- [x] AppID = `wx962acbf120074da9`，云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] `advanceSubjectModel`、`getTeacherCurrentModel`、`getStudentCurrentModel` 均为 Active；Student Current Model 运行时正确返回“规则自动更新”
+- [x] TEST Student 自动 revision、17 变量完整性、旧版保留、Subject 指针与重复 refresh 幂等通过
+- [x] 68 个 JavaScript 通过 `node --check`，102 个 JSON 解析通过，Evidence Health 规则测试 PASS
+- [x] 开发者工具编译 student-model 通过，Console / Network 的 error / warning / fail / timeout 过滤为空
+- [x] `1.0.8` 已于 2026-08-31 12:35:40 CST 上传，代码包 816025 bytes
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
+
+版本说明：基于统一证据规则自动更新教师与学生主体模型。
 
 ## 真人试采候选版本 1.0.7（2026-08-31）
 
