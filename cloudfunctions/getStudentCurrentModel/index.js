@@ -162,8 +162,12 @@ exports.main = async (event = {}) => {
       model_version: snapshot.model_version || snapshot.version || '1.0',
       model_status: modelStatus,
       model_status_name: modelStatus === 'active'
-        ? activationMode === 'automatic_rule' ? '规则自动更新' : '已复核'
-        : '待复核',
+        ? activationMode === 'automatic_rule'
+          ? '规则自动更新'
+          : activationMode === 'automatic_initial'
+            ? '自动构建'
+            : '历史已生效'
+        : '自动构建待完成',
       activation_mode: activationMode,
       model: sanitizeModel(snapshot.model_data),
       approved_at: modelStatus === 'active' ? snapshot.approved_at || null : null,

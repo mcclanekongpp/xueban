@@ -112,9 +112,9 @@ Page({
         snapshotId: result.snapshot_id || '',
         modelVersion: result.model_version || '',
         modelStatus,
-        modelStatusName: result.model_status_name || (modelStatus === 'draft' ? '待复核' : '已复核'),
+        modelStatusName: result.model_status_name || (modelStatus === 'draft' ? '自动构建待完成' : '已生效'),
         modelUpdatedAt: formatDate(result.updated_at || result.created_at),
-        pageTitle: modelStatus === 'draft' ? '首次建模结果（待复核）' : '当前学生模型',
+        pageTitle: modelStatus === 'draft' ? '首次建模结果（生成中）' : '当前学生模型',
         pageDescription: '当前结果基于首次采集形成，后续仍可根据新的信息持续完善。',
         dimensions,
         cautions: Array.isArray(result.model.model_cautions) ? result.model.model_cautions : []

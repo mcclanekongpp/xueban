@@ -1,5 +1,6 @@
 const cloud = require('wx-server-sdk')
 const tcb = require('@cloudbase/node-sdk')
+const crypto = require('crypto')
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV
@@ -136,19 +137,56 @@ const ALL_VARIABLES =
 // 工具函数
 // ==================================================
 
-function createId(prefix) {
-  const time =
-    Date.now()
-      .toString(36)
-      .toUpperCase()
+function initialSnapshotIdentity(subjectId) {
+  const hash = crypto
+    .createHash('sha256')
+    .update(`teacher_v1.0:${subjectId}:initial:1.0`)
+    .digest('hex')
 
-  const random =
-    Math.random()
-      .toString(36)
-      .slice(2, 7)
-      .toUpperCase()
+  return {
+    document_id: `initial_teacher_${hash.slice(0, 32)}`,
+    snapshot_id: `MS_INITIAL_${hash.slice(0, 20).toUpperCase()}`
+  }
+}
 
-  return `${prefix}_${time}_${random}`
+
+async function activateTeacherInitialSnapshot(snapshot, subject, user) {
+  const now = db.serverDate()
+
+  await db.runTransaction(async transaction => {
+    await transaction
+      .collection('model_snapshots')
+      .doc(snapshot._id)
+      .update({
+        data: {
+          status: 'active',
+          activation_mode: 'automatic_initial',
+          activation_rule_version: 'subject_initial_auto_activation_v1.0',
+          activated_at: now,
+          auto_activated_at: now,
+          auto_activated_by: 'system:initial_collection_complete',
+          triggered_by_user_id: user.user_id,
+          updated_at: now
+        }
+      })
+
+    await transaction
+      .collection('subjects')
+      .doc(subject._id)
+      .update({
+        data: {
+          current_version: snapshot.model_version || snapshot.version || '1.0',
+          current_snapshot_id: snapshot.snapshot_id,
+          updated_at: now
+        }
+      })
+  })
+
+  return {
+    ...snapshot,
+    status: 'active',
+    activation_mode: 'automatic_initial'
+  }
 }
 
 
@@ -836,7 +874,7 @@ exports.main =
           'SAVE_MODEL_MODE_DEPRECATED',
 
         message:
-          'save_model 模式已停用，请先生成 draft，再通过 approve_snapshot_id 转为正式模型'
+          'save_model 模式已停用；首次采集完成后请使用 preview_model 触发幂等自动构建'
       }
     }
 
@@ -953,13 +991,50 @@ exports.main =
         .subject_id
 
 
+    const subjectResult =
+      await db
+        .collection('subjects')
+        .where({
+          subject_id:
+            subjectId,
+
+          subject_type:
+            'teacher',
+
+          model_framework:
+            'teacher_v1.0',
+
+          status:
+            'active'
+        })
+        .limit(2)
+        .get()
+
+
+    if (
+      subjectResult.data.length !== 1
+    ) {
+      return {
+        success: false,
+
+        code:
+          'TEACHER_SUBJECT_INVALID',
+
+        message:
+          '教师研究主体不存在、已失效或存在重复'
+      }
+    }
+
+
+    const subject =
+      subjectResult.data[0]
+
+
     // ==================================================
-    // 5. approve 模式
+    // 5. 历史 approve 参数兼容
     //
-    // 只把已经生成并审核的 draft 原样转为 active。
-    //
-    // 不调用 AI。
-    // 不重新生成 model_data。
+    // 正式链路已经取消人工审核。历史调用只对已 active
+    // snapshot 幂等返回，不允许通过前端指定 ID 触发激活。
     // ==================================================
 
     if (approveSnapshotId) {
@@ -1015,11 +1090,11 @@ exports.main =
         return {
           success: true,
 
-          already_approved:
+          already_active:
             true,
 
-          approved:
-            true,
+          auto_activated:
+            draft.activation_mode === 'automatic_initial',
 
           snapshot_id:
             draft.snapshot_id,
@@ -1036,99 +1111,11 @@ exports.main =
       }
 
 
-      if (
-        draft.status !== 'draft'
-      ) {
-        return {
-          success: false,
-
-          code:
-            'SNAPSHOT_NOT_DRAFT',
-
-          message:
-            '当前模型快照不是可审核的 draft 状态'
-        }
-      }
-
-
-      // 检查是否已经存在其他 active 初始模型
-      const activeResult =
-        await db
-          .collection(
-            'model_snapshots'
-          )
-          .where({
-            subject_id:
-              subjectId,
-
-            subject_type:
-              'teacher',
-
-            framework:
-              'teacher_v1.0',
-
-            snapshot_type:
-              'initial',
-
-            status:
-              'active'
-          })
-          .limit(1)
-          .get()
-
-
-      if (
-        activeResult.data.length > 0
-      ) {
-        return {
-          success: false,
-
-          code:
-            'ACTIVE_INITIAL_MODEL_ALREADY_EXISTS',
-
-          snapshot_id:
-            activeResult.data[0]
-              .snapshot_id,
-
-          message:
-            '当前教师已经存在正式首次主体模型'
-        }
-      }
-
-
-      const now =
-        db.serverDate()
-
-
-      await db
-        .collection(
-          'model_snapshots'
-        )
-        .doc(
-          draft._id
-        )
-        .update({
-          data: {
-            status:
-              'active',
-
-            approved_at:
-              now,
-
-            updated_at:
-              now
-          }
-        })
-
-
       return {
-        success: true,
+        success: false,
 
-        approved:
-          true,
-
-        already_approved:
-          false,
+        code:
+          'INITIAL_MODEL_APPROVAL_REMOVED',
 
         snapshot_id:
           draft.snapshot_id,
@@ -1136,11 +1123,8 @@ exports.main =
         subject_id:
           subjectId,
 
-        model:
-          draft.model_data,
-
         message:
-          '教师首次主体模型已由草稿原样转为正式模型'
+          '首次模型人工审核入口已停用；请由首次采集完成后的自动链幂等构建并激活'
       }
     }
 
@@ -1363,7 +1347,12 @@ exports.main =
           '仍有教师证据尚未完成分析',
 
         pending_count:
-          pendingEvidence.length
+          pendingEvidence.length,
+
+        pending_evidence_ids:
+          pendingEvidence
+            .map(item => item.evidence_id)
+            .filter(Boolean)
       }
     }
 
@@ -1405,6 +1394,34 @@ exports.main =
           normalized.analysis_id,
           normalized
         )
+      }
+    }
+
+
+    const invalidAnalysisEvidenceIds =
+      evidenceDocs
+        .filter(evidence => {
+          const analysis =
+            analysisMap.get(evidence.analysis_id)
+
+          if (!analysis) return true
+          if (analysis.evidence_id && analysis.evidence_id !== evidence.evidence_id) return true
+          if (analysis.subject_id && analysis.subject_id !== subjectId) return true
+          if (analysis.framework && analysis.framework !== 'teacher_v1.0') return true
+          if (analysis.variable_id && analysis.variable_id !== evidence.variable_id) return true
+          return false
+        })
+        .map(evidence => evidence.evidence_id)
+        .filter(Boolean)
+
+
+    if (invalidAnalysisEvidenceIds.length > 0) {
+      return {
+        success: false,
+        code: 'EVIDENCE_ANALYSIS_INCOMPLETE',
+        message: '仍有教师首次证据未完成一致的有效分析',
+        pending_count: invalidAnalysisEvidenceIds.length,
+        pending_evidence_ids: invalidAnalysisEvidenceIds
       }
     }
 
@@ -1580,7 +1597,7 @@ exports.main =
 
 
     // ==================================================
-    // 13. 已有正式初始模型则不再生成 draft
+    // 13. 已有任一正式模型则不再重复生成初始模型
     // ==================================================
 
     const activeResult =
@@ -1598,14 +1615,26 @@ exports.main =
           framework:
             'teacher_v1.0',
 
-          snapshot_type:
-            'initial',
-
           status:
             'active'
         })
-        .limit(1)
+        .limit(2)
         .get()
+
+
+    if (
+      activeResult.data.length > 1
+    ) {
+      return {
+        success: false,
+
+        code:
+          'MULTIPLE_ACTIVE_TEACHER_MODELS',
+
+        message:
+          '该教师存在多个 active 模型，需先处理数据一致性'
+      }
+    }
 
 
     if (
@@ -1613,6 +1642,30 @@ exports.main =
     ) {
       const active =
         activeResult.data[0]
+
+      const activeVersion =
+        active.model_version || active.version || '1.0'
+
+      if (
+        subject.current_snapshot_id !== active.snapshot_id ||
+        String(subject.current_version || '') !== String(activeVersion)
+      ) {
+        await db
+          .collection('subjects')
+          .doc(subject._id)
+          .update({
+            data: {
+              current_version:
+                activeVersion,
+
+              current_snapshot_id:
+                active.snapshot_id,
+
+              updated_at:
+                db.serverDate()
+            }
+          })
+      }
 
       return {
         success: true,
@@ -1642,11 +1695,66 @@ exports.main =
 
 
     // ==================================================
-    // 14. 已有 draft 时直接复用
-    //
-    // 防止重复预览消耗 Token，
-    // 也保证审核对象始终一致。
+    // 14. 恢复中断的自动激活，或自动激活历史 draft
     // ==================================================
+
+    const expectedIdentity =
+      initialSnapshotIdentity(subjectId)
+
+
+    const recoveringResult =
+      await db
+        .collection('model_snapshots')
+        .where({
+          snapshot_id:
+            expectedIdentity.snapshot_id,
+
+          subject_id:
+            subjectId,
+
+          subject_type:
+            'teacher',
+
+          framework:
+            'teacher_v1.0',
+
+          status:
+            'activating'
+        })
+        .limit(2)
+        .get()
+
+
+    if (recoveringResult.data.length > 1) {
+      return {
+        success: false,
+        code: 'DUPLICATE_TEACHER_INITIAL_MODEL',
+        message: '该教师存在重复的首次模型激活记录'
+      }
+    }
+
+
+    if (recoveringResult.data.length === 1) {
+      const recovered =
+        await activateTeacherInitialSnapshot(
+          recoveringResult.data[0],
+          subject,
+          user
+        )
+
+      return {
+        success: true,
+        recovered_activation: true,
+        auto_activated: true,
+        draft: false,
+        snapshot_id: recovered.snapshot_id,
+        activation_mode: 'automatic_initial',
+        subject_id: subjectId,
+        model: recovered.model_data,
+        message: '教师首次主体模型自动激活已恢复完成'
+      }
+    }
+
 
     const draftResult =
       await db
@@ -1673,8 +1781,17 @@ exports.main =
           'created_at',
           'desc'
         )
-        .limit(1)
+        .limit(2)
         .get()
+
+
+    if (draftResult.data.length > 1) {
+      return {
+        success: false,
+        code: 'DUPLICATE_TEACHER_INITIAL_MODEL',
+        message: '该教师存在重复的首次模型草稿'
+      }
+    }
 
 
     if (
@@ -1683,32 +1800,45 @@ exports.main =
       const draft =
         draftResult.data[0]
 
+      const activated =
+        await activateTeacherInitialSnapshot(
+          draft,
+          subject,
+          user
+        )
+
       return {
         success: true,
 
         preview:
-          true,
+          false,
 
         draft:
-          true,
+          false,
 
         reused_draft:
           true,
 
         saved:
-          false,
+          true,
 
-        draft_snapshot_id:
-          draft.snapshot_id,
+        auto_activated:
+          true,
+
+        snapshot_id:
+          activated.snapshot_id,
+
+        activation_mode:
+          'automatic_initial',
 
         subject_id:
           subjectId,
 
         model:
-          draft.model_data,
+          activated.model_data,
 
         message:
-          '已存在待审核教师首次主体模型草稿，本次直接返回原草稿'
+          '历史教师首次模型草稿已按统一规则自动激活'
       }
     }
 
@@ -2023,15 +2153,18 @@ ${JSON.stringify(aiInput)}
 
 
     // ==================================================
-    // 20. 生成 draft snapshot
+    // 20. 创建并自动激活 initial snapshot
     //
-    // preview 后立即把同一份模型保存为 draft。
-    // 后续审核通过时只修改 status，
-    // 绝不重新调用 AI。
+    // 使用确定性 ID 保证并发和重试幂等。先写 activating，只有事务
+    // 同时更新 Subject 当前指针后才成为 active，不设人工审核字段。
     // ==================================================
 
+    const identity =
+      expectedIdentity
+
+
     const snapshotId =
-      createId('MS')
+      identity.snapshot_id
 
 
     const now =
@@ -2063,6 +2196,9 @@ ${JSON.stringify(aiInput)}
 
 
     const snapshotDoc = {
+      _id:
+        identity.document_id,
+
       snapshot_id:
         snapshotId,
 
@@ -2077,6 +2213,12 @@ ${JSON.stringify(aiInput)}
 
       model_version:
         '1.0',
+
+      version:
+        '1.0',
+
+      model_type:
+        'initial',
 
       snapshot_type:
         'initial',
@@ -2115,7 +2257,7 @@ ${JSON.stringify(aiInput)}
         'hy3',
 
       status:
-        'draft',
+        'activating',
 
       created_at:
         now,
@@ -2125,38 +2267,97 @@ ${JSON.stringify(aiInput)}
     }
 
 
-    const saveResult =
-      await db
-        .collection(
-          'model_snapshots'
+    let saveResult
+
+
+    try {
+      saveResult =
+        await db
+          .collection('model_snapshots')
+          .add({
+            data:
+              snapshotDoc
+          })
+    } catch (error) {
+      const existingResult =
+        await db
+          .collection('model_snapshots')
+          .where({
+            snapshot_id:
+              snapshotId,
+
+            subject_id:
+              subjectId,
+
+            framework:
+              'teacher_v1.0'
+          })
+          .limit(2)
+          .get()
+
+      if (existingResult.data.length !== 1) {
+        throw error
+      }
+
+      const existing =
+        await activateTeacherInitialSnapshot(
+          existingResult.data[0],
+          subject,
+          user
         )
-        .add({
-          data:
-            snapshotDoc
-        })
+
+      return {
+        success: true,
+        already_active: true,
+        auto_activated: true,
+        draft: false,
+        snapshot_id: existing.snapshot_id,
+        activation_mode: 'automatic_initial',
+        subject_id: subjectId,
+        model: existing.model_data,
+        message: '教师首次主体模型已自动构建并激活'
+      }
+    }
+
+
+    const activatedSnapshot =
+      await activateTeacherInitialSnapshot(
+        {
+          ...snapshotDoc,
+          _id: saveResult._id
+        },
+        subject,
+        user
+      )
 
 
     // ==================================================
-    // 21. 返回同一份 draft
+    // 21. 返回已自动激活的同一份模型
     // ==================================================
 
     return {
       success: true,
 
       preview:
-        true,
+        false,
 
       draft:
+        false,
+
+      auto_activated:
         true,
 
       reused_draft:
         false,
 
       saved:
-        false,
+        true,
 
-      draft_snapshot_id:
+      snapshot_id:
         snapshotId,
+
+      activation_mode:
+        'automatic_initial',
 
       database_id:
         saveResult._id,
@@ -2165,13 +2366,13 @@ ${JSON.stringify(aiInput)}
         subjectId,
 
       model:
-        modelData,
+        activatedSnapshot.model_data,
 
       usage:
         aiResult.usage || null,
 
       message:
-        '教师首次主体模型候选草稿已生成，审核通过后可原样转为正式模型'
+        '教师首次主体模型已自动构建并激活'
     }
 
   } catch (error) {

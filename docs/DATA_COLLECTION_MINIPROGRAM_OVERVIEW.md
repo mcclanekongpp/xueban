@@ -1,12 +1,14 @@
 # 数据采集小程序整体说明与模拟课堂路线对照
 
-> 文档版本：V1.3
+> 文档版本：V1.4
 >
 > 核对日期：2026-08-31
 >
 > 核对依据：当前本地代码、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`
 >
-> 当前候选版本：微信小程序开发版 `1.0.8`（已于 2026-08-31 12:35:40 CST 上传；尚未提交审核或正式发布）
+> 当前候选版本：微信小程序开发版 `1.0.9`（已于 2026-08-31 19:07:57 CST 上传，代码包 828743 bytes；尚未提交审核或正式发布）
+>
+> 当前前沿状态：Teacher / Student 首次模型已改为无人工审核的自动构建/激活，并新增 researcher/admin 只读主体构建总览；相关云函数已部署，隔离 TEST Teacher / Student 已完成云端自动分析、激活、缺口保留和幂等验证；该批改动已进入 `1.0.9`。
 
 ## 1. 文档目的
 
@@ -67,8 +69,7 @@
 - 语音云存储与腾讯 ASR；
 - 原始 Message / Voice 与 Evidence 分层保存；
 - Teacher / Student Evidence Analysis；
-- 教师和学生首次模型 draft 构建；
-- Human Review 后转为 active；
+- 教师和学生首次模型自动构建与激活（已部署并通过 TEST Teacher / Student 云端验证）；
 - 当前模型安全展示；
 - 教师两类持续记录；
 - 学生“再说一说”持续采集；
@@ -85,7 +86,7 @@
 - 固定人格标签、心理诊断或学业诊断；
 - 单条 Evidence 直接改写主体模型；
 - 不满足数量、独立记录、覆盖度和无矛盾门槛仍强制更新模型；
-- 首次模型自动审批（Teacher-T0 / Student-M0 仍保留人工审核）；
+- 人工模型审核步骤（Teacher-T0 / Student-M0 改为固定规则下自动构建/激活）；
 - 图片、视频和自动行为识别；
 - 双主体自动互动；
 - 完整课堂事件引擎；
@@ -101,7 +102,7 @@
 | Teacher Subject | 独立教师研究主体，使用 Teacher_ID | 是 |
 | Student Subject | 独立学生研究主体，使用 Student_ID | 是 |
 | Guardian | 使用家长微信帮助学生进入和采集的操作者 | 否 |
-| researcher / admin | 受控登记、构建和审核操作者 | 否 |
+| researcher / admin | 受控登记与跨主体构建情况查看者 | 否 |
 
 关键约束：
 
@@ -259,7 +260,7 @@ T0 只作为主体模型背景，不评分。
 Task → Session → Voice → ASR → Message → Evidence → Progress
 ```
 
-首次 Evidence Analysis、draft 构建与 Human Review 已有受控函数和已验证链路，但不是家长/教师页面中的自动审批动作。
+新规则在 13/13 完成后先幂等补齐 pending initial Evidence Analysis，再自动调用 `buildTeacherInitialModel` 构建和激活 Teacher-T0。失败时保留全部 Voice、Message、Evidence 与进度，Teacher Home 后续幂等重试，不需要人工审批。
 
 ### 7.4 教师持续记录
 
@@ -455,24 +456,25 @@ Teacher / Student 初始模型生成协议都要求跨证据综合，重点提�
 
 模型描述不能把 ASR 转写或 `extracted_points` 简单拼接。证据只支持行为时，也不能反推深层信念。
 
-### 10.6 首次模型快照和人工复核
+### 10.6 首次模型快照和自动激活
 
 ```text
 全部有效 Evidence + 最新有效 Analysis
   → AI 跨证据综合
-  → 新 draft Model Snapshot
-  → Human Review
-  → 同一 snapshot 转 active
+  → 固定 13 / 17 变量与概览结构校验
+  → 确定性 Model Snapshot（activating）
+  → 事务自动转 active + 更新 Subject 指针
 ```
 
 关键规则：
 
-- 新的首次模型先是 draft，不能自动 active；
-- 已审批 active snapshot 不静默改写；
+- 首次采集完成且 Evidence Analysis 齐备后自动构建 active initial snapshot；
+- 已有 active snapshot 幂等复用，不静默改写；
 - 后续模型变化必须创建新 snapshot；
-- Student 普通 Guardian 不能批准模型；
-- 当前 Student 审批函数只允许 researcher / admin，或严格限定的 TEST 技术路径；
-- Teacher 初始模型的生成与 approve 模式相互分离。
+- Student 普通 Guardian 不能指定他人 subject_id、改变模型规则或直接写 snapshot；
+- 新 initial snapshot 使用 `activation_mode = automatic_initial`、确定性 ID 和事务更新，重试不生成重复记录；
+- 证据不足或缺失的变量仍保留为“证据不足”，通过进度和后续提示暴露缺口；
+- `approveStudentInitialModel` 仅作历史请求兼容，不再执行新审批写入。
 
 ### 10.7 持续证据健康与模型版本候选
 
@@ -566,11 +568,11 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 | supportive Evidence 跨至少两个中国标准时间自然日 | 10% |
 | supportive Evidence 跨至少两个 context 或 source type | 5% |
 
-该百分比只表示“固定维度的数据采集和证据底座覆盖程度”，不代表能力、水平、模型质量或置信度。它不会降低 Evidence 的相关性、充分性、首次模型审核或持续模型自动更新门槛。
+该百分比只表示“固定维度的数据采集和证据底座覆盖程度”，不代表能力、水平、模型质量或置信度。它不会降低 Evidence 的相关性、充分性、首次模型构建或持续模型自动更新门槛。证据不足只会降低对应变量的进度并提高补充优先级。
 
 ### 10.10 后续补充对话提醒
 
-`getSubjectModelGuidance` 只读当前 Evidence、最新 active Analysis 和 active/draft snapshot，根据以下缺口排序 1—3 个自然对话提示：
+`getSubjectModelGuidance` 只读当前 Evidence、最新 active Analysis 和当前 snapshot，根据以下缺口排序 1—3 个自然对话提示：
 
 - 尚无 supportive Evidence；
 - 只有 weak 线索；
@@ -701,12 +703,12 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 | `analyzeStudentEvidence` | 正式 | 学生持续路由、单条与批量 Student Evidence Analysis |
 | `advanceSubjectModel` | 正式/兼容受控 | refresh 自动重建健康层并在满足统一门槛时生成、激活 revision；旧 build/resolve/approve 作兼容恢复 |
 | `analyzePendingTeacherEvidence` | 辅助 | 只读教师 pending Evidence 列表 |
-| `buildTeacherInitialModel` | 受控 | 教师 draft 构建及指定 draft 审批模式 |
-| `buildStudentInitialModel` | 受控 | Student-M0 draft 构建 |
-| `approveStudentInitialModel` | 受控 | Student-M0 Human Review 后转 active |
+| `buildTeacherInitialModel` | 正式 | 教师 13/13 后幂等自动构建并激活 Teacher-T0 |
+| `buildStudentInitialModel` | 正式 | Student 17/17 后幂等自动构建并激活 Student-M0 |
+| `approveStudentInitialModel` | 历史兼容 | 已 active 请求幂等返回；不再执行新人工审批 |
 | `getTeacherCurrentModel` | 正式只读 | 当前 active Teacher Model |
 | `getStudentCurrentModel` | 正式只读 | 当前 Guardian/研究者安全 Student Model 摘要 |
-| `getSubjectModelGuidance` | 正式只读 | 构建进度与后续补充提示 |
+| `getSubjectModelGuidance` | 正式只读 | 个体构建进度/补充提示；researcher/admin 跨主体安全总览 |
 | `submitTeacherContinuousRecord` | 遗留端点 | 无正式前端入口；正式页改用分析函数长时路由 |
 | `submitStudentContinuousRecord` | 遗留端点 | 无正式前端入口；正式页改用分析函数长时路由 |
 | `rebuildVariableEvidenceProfile` | 诊断兼容 | 单变量 V1.0 工具保留；正式全主体主链使用 advanceSubjectModel |
@@ -800,9 +802,9 @@ T0/S0 + 完整首次采集进度
   → 过滤 supportive Evidence
   → 固定 13/17 变量跨证据综合
   → overview_summary + dimensions + variables
-  → model_snapshots(status=draft)
-  → Human Review
-  → 同一 snapshot status=active
+  → 确定性 model_snapshots(status=activating)
+  → 事务自动激活 status=active
+  → subjects.current_version / current_snapshot_id
   → getTeacherCurrentModel / getStudentCurrentModel
 ```
 
@@ -872,20 +874,21 @@ Model Snapshot
 | Teacher T0 | 已完成 |
 | Teacher 13/13 | 已完成 |
 | Teacher Evidence / Analysis | 已完成并有真实持续语音验证 |
-| Teacher draft / Human Review / active | 已完成 |
+| Teacher initial automatic build / active | 无审核新规则已部署并完成 TEST Teacher 云端验证 |
 | Teacher Current Model | 已完成 |
 | Student Binding | 已完成 |
 | Student S0 | 已完成 |
 | Student 17/17 | 已完成技术闭环 |
 | Student Voice / ASR | 已完成真机验证 |
 | Student Evidence / Analysis | 已完成 |
-| Student-M0 draft / Human Review / active | 已完成 TEST 闭环 |
+| Student-M0 automatic build / active | 无审核新规则已部署并完成 TEST Student 云端验证 |
 | Student Continuous | 已完成真机录音、路由、Evidence 和 Analysis 验证 |
 | Evidence Health / Candidate | 已完成 Teacher 13 + Student 17 Profile 和 5 条 Candidate 实测 |
 | 规则驱动自动 revision | 已部署；TEST Student `1.0 → 1.1` 自动激活、旧版保留和重复 refresh 幂等通过 |
 | 模型构建进度/雷达图 | 已完成，只读运行时计算 |
 | 后续补充对话提醒 | 已完成，只读运行时计算 |
-| 微信开发版本 | `1.0.8` 已上传，代码包 816025 bytes |
+| researcher/admin 主体构建总览 | 已部署；普通 Teacher 跨主体请求已实测被拒绝 |
+| 微信开发版本 | `1.0.9` 已上传，代码包 828743 bytes |
 | 微信审核 | 尚未提交 |
 | 正式发布 | 尚未发布 |
 
@@ -904,10 +907,10 @@ Evidence Health 的云端基线在自动激活前为 30 个固定变量 Profile�
 | 原始 Voice / Message | 保留主体真实表达和可复核材料 |
 | Evidence / Analysis | 把原始数据转换为可追溯变量证据 |
 | Variable Evidence Profile / Gap | 表达各变量当前证据覆盖、缺口、矛盾与停滞状态 |
-| Model Change Candidate | 把 active snapshot 之后可能引起变化的新证据组织为可审核候选 |
+| Model Change Candidate | 把 active snapshot 之后可能引起变化的新证据组织为可规则判定的候选 |
 | active Model Snapshot | 提供某一时间点可版本化的主体状态输入 |
 | context / uncertainty | 限制未来 Agent 不能脱离证据边界自由发挥 |
-| 首次模型审核 + 持续自动规则审计 | 防止低质量证据或无约束 AI 直接成为当前模型 |
+| 首次固定结构/证据规则 + 持续自动规则审计 | 防止低质量证据或无约束 AI 直接成为当前模型 |
 | 构建进度与补充提示 | 帮助发现数据覆盖空白并持续采集 |
 | 全量备份 | 支持科研审计、迁移与长期保存 |
 
@@ -988,11 +991,11 @@ Evidence
 - Teacher Subject Binding、T0、13 项首次采集和 Teacher 初始模型；
 - Student Subject Binding、S0、17 项首次采集和 Student-M0；
 - Teacher / Student Voice、ASR、Evidence、Evidence Analysis；
-- Human Review 与 active snapshot；
+- 首次模型固定结构/证据校验与 active snapshot（无人工审核新规则已部署并完成云端 TEST 验证）；
 - Teacher / Student 当前模型展示；
 - Teacher / Student Continuous Collection；
 - Teacher / Student Evidence Profile、Gap、Stagnation 与 Model Change Candidate；
-- 受控持续证据 revision draft / approval 接口及权限边界；
+- 受控持续证据 revision 兼容/恢复接口及权限边界；
 - 规则驱动自动 revision、确定性 snapshot、自动激活与重复 refresh 幂等；
 - URL ASR、批量 Analysis 与异步健康层性能优化；
 - 构建进度、雷达图和补充对话提醒；
@@ -1001,7 +1004,8 @@ Evidence
 ### 已有代码但属于受控或遗留能力
 
 - Teacher / Student 研究主体预登记；
-- Teacher / Student 初始模型构建与审批；
+- Teacher / Student 初始模型自动构建/激活（已部署并完成云端 TEST 验证）；
+- researcher/admin 只读主体构建总览（已部署，普通用户越权拒绝已验证）；
 - pending Teacher Evidence 批量分析辅助；
 - 历史 Student Binding 接口；
 - 独立 Teacher / Student continuous submit 旧端点；
@@ -1027,11 +1031,11 @@ Evidence
 
 在不扩大研究架构的前提下，近期顺序应是：
 
-1. 完成微信公众平台隐私保护指引核对并提交 `1.0.8` 审核；
-2. 用全新微信账号完成教师正确绑定烟雾测试；
+1. 在微信公众平台核对隐私保护指引，提交 `1.0.9` 审核；
+2. 审核通过后发布小程序；
 3. 组织真人教师、家长和学生试采；
-4. 根据真实语音、ASR、交互负担和自动 revision 质量修复阻断问题；
-5. 形成主体复现的验证方案后，再进入阶段2。
+4. 组织真人教师、家长和学生试采；
+5. 根据真实语音、ASR、交互负担和自动更新质量修复阻断问题。
 
 ## 22. 关键代码位置
 
@@ -1048,9 +1052,9 @@ Evidence
 - 身份与绑定：`login`、`registerTeacherForStudy`、`registerStudentForStudy`、`bindSubjectByCode`、`getMySubjectBindings`
 - 采集：`createSession`、`saveVoiceRecord`、`transcribeVoice`
 - Teacher：`completeTeacherCollectionTask`、`analyzeTeacherEvidence`、`buildTeacherInitialModel`、`getTeacherCurrentModel`
-- Student：`createStudentTaskEvidence`、`completeStudentCollectionTask`、`analyzeStudentEvidence`、`buildStudentInitialModel`、`approveStudentInitialModel`、`getStudentCurrentModel`
+- Student：`createStudentTaskEvidence`、`completeStudentCollectionTask`、`analyzeStudentEvidence`、`buildStudentInitialModel`、`getStudentCurrentModel`；`approveStudentInitialModel` 仅作历史兼容
 - 持续证据健康与版本：`advanceSubjectModel`（refresh 自动更新；status；旧 build/resolve/approve 兼容恢复）、`evidence-health-core.js`、`revision-core.js`、`rebuildVariableEvidenceProfile`（单变量诊断兼容）
-- 通用只读诊断：`getSubjectModelGuidance`
+- 通用只读诊断/研究总览：`getSubjectModelGuidance`、`pages/research-overview/`
 
 ### 文档与运维
 
@@ -1063,4 +1067,4 @@ Evidence
 
 ## 23. 一句话总结
 
-当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 初始 draft → Human Review → active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 统一门槛 → 自动 revision snapshot → 自动 active”的 Teacher / Student 主体表征基础链。自动 revision 已用 TEST Student 完成云端激活和幂等验证；它不会让单条或低质量证据直接改模型。系统已具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。
+当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 首次模型固定结构/证据校验 → 自动 active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 统一门槛 → 自动 revision snapshot → 自动 active”的 Teacher / Student 主体表征基础链。首次无审核自动激活与研究者总览已本地完成，待云端 TEST 验证；自动 revision 已用 TEST Student 完成云端激活和幂等验证。任何自动路径都不会让单条或低质量证据直接改模型；缺失/不足变量保留为构建缺口和后续补充提示。系统已具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。

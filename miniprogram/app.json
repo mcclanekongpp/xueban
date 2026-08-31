@@ -10,7 +10,8 @@
     "pages/student-home/student-home",
     "pages/student-collection/student-collection",
     "pages/student-continuous/student-continuous",
-    "pages/student-model/student-model"
+    "pages/student-model/student-model",
+    "pages/research-overview/research-overview"
   ],
   "window": {
     "backgroundColor": "#F6F6F6",

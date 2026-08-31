@@ -1,5 +1,6 @@
 const cloud = require('wx-server-sdk')
 const tcb = require('@cloudbase/node-sdk')
+const crypto = require('crypto')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -30,11 +31,48 @@ const VARIABLES = DIMENSIONS.flatMap((dimension) =>
   }))
 )
 
-function makeId(prefix) {
-  return `${prefix}_${Date.now().toString(36).toUpperCase()}_${Math.random()
-    .toString(36)
-    .slice(2, 7)
-    .toUpperCase()}`
+function initialSnapshotIdentity(subjectId) {
+  const hash = crypto
+    .createHash('sha256')
+    .update(`student_v1.0:${subjectId}:initial:1.0`)
+    .digest('hex')
+
+  return {
+    document_id: `initial_student_${hash.slice(0, 32)}`,
+    snapshot_id: `MS_INITIAL_${hash.slice(0, 20).toUpperCase()}`
+  }
+}
+
+async function activateStudentInitialSnapshot(snapshot, subject, user) {
+  const now = db.serverDate()
+
+  await db.runTransaction(async (transaction) => {
+    await transaction.collection('model_snapshots').doc(snapshot._id).update({
+      data: {
+        status: 'active',
+        activation_mode: 'automatic_initial',
+        activation_rule_version: 'subject_initial_auto_activation_v1.0',
+        activated_at: now,
+        auto_activated_at: now,
+        auto_activated_by: 'system:initial_collection_complete',
+        triggered_by_user_id: user.user_id,
+        updated_at: now
+      }
+    })
+    await transaction.collection('subjects').doc(subject._id).update({
+      data: {
+        current_version: snapshot.model_version || snapshot.version || '1.0',
+        current_snapshot_id: snapshot.snapshot_id,
+        updated_at: now
+      }
+    })
+  })
+
+  return {
+    ...snapshot,
+    status: 'active',
+    activation_mode: 'automatic_initial'
+  }
 }
 
 function uniqueStrings(values) {
@@ -268,23 +306,20 @@ exports.main = async (event = {}) => {
     }
 
     const subject = subjectResult.data[0]
+    const expectedIdentity = initialSnapshotIdentity(subjectId)
     const controlled =
       ['researcher', 'admin'].includes(user.role) ||
-      (
-        user.role === 'teacher' &&
-        subject.is_test === true &&
-        bindingResult.data.length === 1
-      )
+      bindingResult.data.length === 1
 
     if (!controlled) {
       return {
         success: false,
         code: 'BUILD_STUDENT_MODEL_FORBIDDEN',
-        message: 'Student-M0 只能由受控研究流程构建'
+        message: '当前微信无权为该学生自动构建 Student-M0'
       }
     }
 
-    const [progressResult, backgroundResult, activeResult, draftResult] = await Promise.all([
+    const [progressResult, backgroundResult, activeResult, draftResult, recoveringResult] = await Promise.all([
       db.collection('collection_progress').where({
         subject_id: subjectId,
         subject_type: 'student',
@@ -301,7 +336,6 @@ exports.main = async (event = {}) => {
         subject_id: subjectId,
         subject_type: 'student',
         framework: 'student_v1.0',
-        snapshot_type: 'initial',
         status: 'active'
       }).limit(2).get(),
       db.collection('model_snapshots').where({
@@ -310,10 +344,21 @@ exports.main = async (event = {}) => {
         framework: 'student_v1.0',
         snapshot_type: 'initial',
         status: 'draft'
-      }).orderBy('created_at', 'desc').limit(2).get()
+      }).orderBy('created_at', 'desc').limit(2).get(),
+      db.collection('model_snapshots').where({
+        snapshot_id: expectedIdentity.snapshot_id,
+        subject_id: subjectId,
+        subject_type: 'student',
+        framework: 'student_v1.0',
+        status: 'activating'
+      }).limit(2).get()
     ])
 
-    if (draftResult.data.length > 1 || activeResult.data.length > 1) {
+    if (
+      draftResult.data.length > 1 ||
+      activeResult.data.length > 1 ||
+      recoveringResult.data.length > 1
+    ) {
       return {
         success: false,
         code: 'DUPLICATE_STUDENT_INITIAL_MODEL',
@@ -323,26 +368,31 @@ exports.main = async (event = {}) => {
 
     if (activeResult.data.length === 1) {
       const active = activeResult.data[0]
+      const activeVersion = active.model_version || active.version || '1.0'
+      if (
+        subject.current_snapshot_id !== active.snapshot_id ||
+        String(subject.current_version || '') !== String(activeVersion)
+      ) {
+        await db.collection('subjects').doc(subject._id).update({
+          data: {
+            current_version: activeVersion,
+            current_snapshot_id: active.snapshot_id,
+            updated_at: db.serverDate()
+          }
+        })
+      }
       return {
         success: true,
         already_active: true,
         draft: false,
         snapshot_id: active.snapshot_id,
+        activation_mode: active.activation_mode || '',
         model: active.model_data
       }
     }
 
-    if (draftResult.data.length === 1) {
-      const draft = draftResult.data[0]
-      return {
-        success: true,
-        reused_draft: true,
-        draft: true,
-        draft_snapshot_id: draft.snapshot_id,
-        model: draft.model_data
-      }
-    }
-
+    // 只有固定 17 项已完成时，才能恢复 activating
+    // 或自动激活历史 draft。记录存在本身不是激活条件。
     if (progressResult.data.length !== 1) {
       return {
         success: false,
@@ -360,6 +410,37 @@ exports.main = async (event = {}) => {
         code: 'STUDENT_INITIAL_COLLECTION_INCOMPLETE',
         completed_tasks: completed,
         message: '学生17项首次采集尚未完成'
+      }
+    }
+
+    if (recoveringResult.data.length === 1) {
+      const recovered = await activateStudentInitialSnapshot(
+        recoveringResult.data[0],
+        subject,
+        user
+      )
+      return {
+        success: true,
+        recovered_activation: true,
+        auto_activated: true,
+        draft: false,
+        snapshot_id: recovered.snapshot_id,
+        activation_mode: 'automatic_initial',
+        model: recovered.model_data
+      }
+    }
+
+    if (draftResult.data.length === 1) {
+      const draft = draftResult.data[0]
+      const active = await activateStudentInitialSnapshot(draft, subject, user)
+      return {
+        success: true,
+        reused_draft: true,
+        auto_activated: true,
+        draft: false,
+        snapshot_id: active.snapshot_id,
+        activation_mode: 'automatic_initial',
+        model: active.model_data
       }
     }
 
@@ -382,12 +463,13 @@ exports.main = async (event = {}) => {
       subject_id: subjectId,
       subject_type: 'student',
       framework: 'student_v1.0',
-      evidence_source: 'initial_interview',
       status: 'active'
     }).limit(100).get()
 
+    const evidenceIds = new Set(evidenceResult.data.map(item => item.evidence_id).filter(Boolean))
     const analysisByEvidence = new Map()
     for (const analysis of analysisResult.data) {
+      if (!evidenceIds.has(analysis.evidence_id)) continue
       if (analysisByEvidence.has(analysis.evidence_id)) {
         return {
           success: false,
@@ -397,6 +479,28 @@ exports.main = async (event = {}) => {
         }
       }
       analysisByEvidence.set(analysis.evidence_id, analysis)
+    }
+
+    const invalidAnalysisEvidenceIds = evidenceResult.data
+      .filter((evidence) => {
+        const analysis = analysisByEvidence.get(evidence.evidence_id)
+        if (!analysis) return true
+        if (analysis.subject_id && analysis.subject_id !== subjectId) return true
+        if (analysis.framework && analysis.framework !== 'student_v1.0') return true
+        if (analysis.variable_id && analysis.variable_id !== evidence.variable_id) return true
+        return false
+      })
+      .map(item => item.evidence_id)
+      .filter(Boolean)
+
+    if (invalidAnalysisEvidenceIds.length > 0) {
+      return {
+        success: false,
+        code: 'STUDENT_EVIDENCE_ANALYSIS_INCOMPLETE',
+        pending_count: invalidAnalysisEvidenceIds.length,
+        pending_evidence_ids: invalidAnalysisEvidenceIds,
+        message: '仍有学生首次证据未完成一致的有效分析'
+      }
     }
 
     const evidenceByVariable = new Map(VARIABLES.map((item) => [item.variable_id, []]))
@@ -461,9 +565,11 @@ exports.main = async (event = {}) => {
         '单次首次采集不能形成稳定人格或永久特征，后续真实证据可以修正当前描述。'
       ]
     }
-    const snapshotId = makeId('MS')
+    const identity = expectedIdentity
+    const snapshotId = identity.snapshot_id
     const now = db.serverDate()
     const snapshot = {
+      _id: identity.document_id,
       snapshot_id: snapshotId,
       subject_id: subjectId,
       subject_type: 'student',
@@ -483,22 +589,56 @@ exports.main = async (event = {}) => {
       generation_protocol: 'student_initial_model_v1.2',
       model_provider: 'cloudbase',
       model_name: 'hy3',
-      status: 'draft',
+      // 创建与激活分成两个可恢复步骤；只有事务同时写入 Subject 指针后
+      // 才成为 active。并发或中断重试会复用确定性 snapshot_id。
+      status: 'activating',
       is_test: subject.is_test === true,
       created_at: now,
       updated_at: now
     }
-    const addResult = await db.collection('model_snapshots').add({ data: snapshot })
+    let addResult
+
+    try {
+      addResult = await db.collection('model_snapshots').add({ data: snapshot })
+    } catch (error) {
+      const existingResult = await db.collection('model_snapshots').where({
+        snapshot_id: snapshotId,
+        subject_id: subjectId,
+        framework: 'student_v1.0'
+      }).limit(2).get()
+
+      if (existingResult.data.length !== 1) throw error
+
+      const existing = existingResult.data[0]
+      await activateStudentInitialSnapshot(existing, subject, user)
+      return {
+        success: true,
+        already_active: true,
+        auto_activated: true,
+        draft: false,
+        snapshot_id: existing.snapshot_id,
+        activation_mode: 'automatic_initial',
+        model: existing.model_data
+      }
+    }
+
+    const activatedSnapshot = await activateStudentInitialSnapshot(
+      { ...snapshot, _id: addResult._id },
+      subject,
+      user
+    )
 
     return {
       success: true,
-      draft: true,
+      draft: false,
+      auto_activated: true,
       reused_draft: false,
-      draft_snapshot_id: snapshotId,
+      snapshot_id: snapshotId,
+      activation_mode: 'automatic_initial',
       database_id: addResult._id,
       subject_id: subjectId,
       variable_count: VARIABLES.length,
-      model: modelData,
+      model: activatedSnapshot.model_data,
       usage: synthesis.usage
     }
   } catch (error) {

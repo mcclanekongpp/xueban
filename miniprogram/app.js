@@ -94,6 +94,15 @@ App({
             ? "/pages/student-home/student-home"
             : "/pages/student-bind/student-bind"
         });
+        return;
+      }
+
+      // researcher / admin 只进入跨主体只读总览；普通教师和 Guardian
+      // 不会获得任何跨主体读取能力。
+      if (role === "researcher" || role === "admin") {
+        wx.reLaunch({
+          url: "/pages/research-overview/research-overview"
+        });
       }
 
     } catch (err) {

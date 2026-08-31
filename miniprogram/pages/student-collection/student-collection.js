@@ -1,4 +1,7 @@
 const recorderManager = wx.getRecorderManager()
+const {
+  ensureStudentInitialModel
+} = require('../../utils/initial-model-automation')
 
 Page({
   data: {
@@ -262,7 +265,24 @@ Page({
           progress: completed.progress,
           canSubmit: false
         })
-        wx.showToast({ title: '本次采集已完成', icon: 'success' })
+        let modelReady = false
+
+        try {
+          wx.showLoading({ title: '正在构建模型', mask: true })
+          await ensureStudentInitialModel(this.data.subjectId)
+          modelReady = true
+        } catch (modelError) {
+          // 已完成的采集、语音、Evidence 与 Analysis 不回滚；
+          // Student Home 会再次幂等补建模。
+          console.error('学生首次模型自动构建待重试：', modelError)
+        } finally {
+          wx.hideLoading()
+        }
+
+        wx.showToast({
+          title: modelReady ? '首次模型已自动生成' : '采集完成，模型生成中',
+          icon: modelReady ? 'success' : 'none'
+        })
         return
       }
 

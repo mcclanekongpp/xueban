@@ -16,7 +16,7 @@
 2. 原始记录形成了哪些 Evidence；
 3. 每条 Evidence 使用了哪一条正式 Evidence Analysis；
 4. 当时形成了哪些 draft / active / 历史 Model Snapshot；
-5. 每个模型版本引用了哪些 Evidence / Analysis、使用了什么生成协议和人工审核信息；
+5. 每个模型版本引用了哪些 Evidence / Analysis、使用了什么生成协议和激活规则，以及历史版本中可能存在的人工审核信息；
 6. School、Class、Subject 与认证操作者之间的组织和绑定关系；
 7. 备份中的每个文件和每条集合导出是否完整、是否可追溯、是否可以恢复。
 

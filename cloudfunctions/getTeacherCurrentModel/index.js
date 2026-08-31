@@ -212,7 +212,9 @@ exports.main = async (event, context) => {
       model_status_name:
         snapshot.activation_mode === 'automatic_rule'
           ? '规则自动更新'
-          : '已复核',
+          : snapshot.activation_mode === 'automatic_initial'
+            ? '自动构建'
+            : '历史已生效',
 
       activation_mode:
         snapshot.activation_mode ||

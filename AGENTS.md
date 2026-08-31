@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的视觉与信息层级已经统一。Teacher / Student 统一绑定协议已建立：研究团队线下预登记 School、Class 与 Teacher / Student Subject，绑定码和学校范围线下编号双重匹配后，教师本人或学生家长的微信才与指定 Subject 建立关系；教师不再因点击“我是教师”自动创建主体。模型页按“100 字内总体概览 → 构建进度雷达图 → 具体变量信息”展示；构建进度不评价能力、水平或模型质量。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成 `1.0 → 1.1` 云端自动激活与重复 refresh 幂等验证；语音性能优化已进入开发环境。全量备份工具 V1.0 已建立并完成首次加密全量备份。小程序开发候选版 `1.0.8` 已于 2026-08-31 上传；尚未提交微信审核或正式发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议已建立，采集页和模型页的信息层级已统一。教师 13/13 与学生 17/17 完成后的首次模型自动分析、构建和激活已部署到 `model-dev-d9gkoyaolb464c28d`，并用隔离 TEST Teacher / Student 验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量和重复调用幂等性；全流程不再设人工审核。证据不足的变量仍保留为“证据不足”，通过构建进度和后续提示显示缺口，不降低 Evidence Analysis 或 supportive 门槛。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链也已部署并完成云端验证。researcher/admin 只读主体构建总览已同步部署；小程序开发候选版 `1.0.9` 已于 2026-08-31 19:07:57 CST 上传，尚未提交审核或正式发布。
 
 ## 五阶段路线
 1. 主体表征
@@ -80,9 +80,9 @@
 
 前端状态语言：证据不足、初步描述、已有一定支持、较稳定。“较稳定”仍然可以被后续证据修正。
 
-模型中的“当前主体刻画”不是 ASR 转写摘要或 Evidence Analysis 要点列表。生成层必须综合有证据支持的情境、关注/理解、判断依据、行动/调整、结果与适用边界；若证据只支持行为，不得反推深层信念。具体原始例子留在 Evidence / evidence_basis，模型描述负责跨证据提炼。首次模型继续保留既有 draft / review 流程；已有 active 模型后的持续 revision 在满足统一自动更新门槛时由规则引擎激活新 snapshot。任何路径都不得覆盖旧 snapshot。
+模型中的“当前主体刻画”不是 ASR 转写摘要或 Evidence Analysis 要点列表。生成层必须综合有证据支持的情境、关注/理解、判断依据、行动/调整、结果与适用边界；若证据只支持行为，不得反推深层信念。具体原始例子留在 Evidence / evidence_basis，模型描述负责跨证据提炼。首次模型在固定采集完成、Evidence Analysis 完整后自动生成并激活；已有 active 模型后的持续 revision 在满足统一自动更新门槛时由规则引擎激活新 snapshot。任何路径都不得覆盖旧 snapshot。
 
-模型构建进度不是测评得分。V1.0 以固定 13 / 17 个变量为分母，只计算每个变量是否已有 active Evidence、有效 Analysis、supportive Evidence、重复支持、跨日和跨情境/来源覆盖，再汇总为一级维度与总体百分比。supportive 的正式定义和模型采纳门槛保持不变；不得为了提高百分比把 irrelevant / uncertain / insufficient 数据计入支持，也不得降低 confidence、首次模型审核或持续模型自动更新门槛。
+模型构建进度不是测评得分。V1.0 以固定 13 / 17 个变量为分母，只计算每个变量是否已有 active Evidence、有效 Analysis、supportive Evidence、重复支持、跨日和跨情境/来源覆盖，再汇总为一级维度与总体百分比。supportive 的正式定义和模型采纳门槛保持不变；不得为了提高百分比把 irrelevant / uncertain / insufficient 数据计入支持，也不得降低 confidence、首次模型构建或持续模型自动更新门槛。
 
 ## 证据基本原则
 1. 原始记录与模型结论分离。
@@ -150,9 +150,10 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 每题独立执行 Session → Voice → ASR → Message → Evidence → Evidence Analysis → Progress，允许中途退出后从下一未完成任务继续。
 - 学生原始记录、Evidence、Evidence Analysis 与 Model Snapshot 的 `subject_id` 均为 Student_ID；Guardian user 只记录为 `operator_user_id`，不得作为被建模主体。
 - Student Evidence Analysis V1.0 使用 `relevance_status`、`evidence_sufficiency`、`extracted_points`、`reasoning_basis`、`context`、`uncertainty`，不做心理诊断、排名、总分或固定人格判断。
-- `buildStudentInitialModel` 使用 `student_initial_model_v1.2` 对全部 supportive Evidence Analysis 做 AI 证据综合，生成包含 S1—S6、17 变量的 draft Student-M0；禁止直接拼接 extracted_points，不足变量仍保留，不自动变为 active。新 draft 另含 100 字以内、覆盖 S1—S6 的 `overview_summary`，不使用分数、排名或诊断表达。
-- `approveStudentInitialModel` 完成受控人工确认。`getStudentCurrentModel` 只向 active Guardian 或 researcher / admin 返回安全摘要；Student Home 在 17/17 后提供“查看首次建模结果”，`student-model` 显示 draft / active 状态及 S1—S6、17 变量的当前描述和不确定性，不返回原始 Evidence、内部 reasoning、分数、排名或诊断。
-- TEST Student 已完成 1 条真机录音/ASR 与 16 条明确 `is_test=true` 的模拟技术记录，验证 17/17、draft、人工审批、active 与当前模型展示全链路。
+- `buildStudentInitialModel` 使用 `student_initial_model_v1.2` 对全部 supportive Evidence Analysis 做 AI 证据综合，固定保留 S1—S6 和 17 变量；禁止直接拼接 extracted_points，不足变量仍保留为“证据不足”。新 Student-M0 含 100 字以内、覆盖 S1—S6 的 `overview_summary`，不使用分数、排名或诊断表达。
+- 17/17 完成后，页面自动补齐待分析 Evidence，然后幂等调用 `buildStudentInitialModel`；新 snapshot 以 `activation_mode = automatic_initial` 自动 active，并事务更新 Subject 当前版本指针。`approveStudentInitialModel` 只作历史兼容，不再提供人工审批写入。
+- `getStudentCurrentModel` 只向 active Guardian 或 researcher / admin 返回安全摘要；Student Home 在 17/17 后提供“查看首次建模结果”，`student-model` 显示 active 状态及 S1—S6、17 变量的当前描述和不确定性，不返回原始 Evidence、内部 reasoning、分数、排名或诊断。
+- TEST Student 历史上已完成 17/17、draft、人工审批、active 与当前模型展示全链路；新规则改为首次模型自动激活，历史审批字段仅作存量数据兼容。
 
 ## Student Continuous Collection V1.0
 - 首次采集 17/17 后，Student Home 提供儿童友好的“再说一说”入口，不显示变量编号、Evidence 或模型更新术语。
@@ -172,12 +173,12 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 
 ## 真人试采版本边界
 - 正式小程序包不暴露 QuickStart、配置助手、批量 Student-M0 或其他 TEST 入口；本地 TEST 脚本可以保留，但真人流程不得调用模拟记录。
-- 真人 Student 完成 17/17 后只允许生成 draft Student-M0，不得由 Guardian 页面自动批准；active 模型必须经 researcher / admin 受控审核。
-- Teacher 初始模型生成与人工批准保持分离，真人采集入口不得调用自动批准捷径。
+- 真人 Teacher / Student 完成固定首次采集且 Evidence Analysis 齐备后，系统自动构建并激活 Teacher-T0 / Student-M0，不设人工审核环节。自动激活不改变 supportive 或信度门槛，证据不足变量以构建进度和后续补充提示显示。
+- researcher / admin 从只读“主体模型构建总览”查看 Teacher / Student 首次采集、当前模型版本、构建进度、缺口数和优先补充提示；普通 Teacher / Guardian 无跨主体总览权限。
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
 - 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
-- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.8` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
+- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.9` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
 
 ## 数据与隐私原则
 1. 身份信息与研究主体信息分离。
@@ -201,7 +202,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 ## 当前开发顺序
 1. 教师首次主体模型 MVP 快速回归并只修复阻断问题（已完成）
 2. Student Binding MVP（已完成）
-3. Student Initial Model MVP：S0 → 17 项首次采集 → Voice / ASR → Evidence / Analysis → Draft → Human Review → Active → Current Model（已完成）
+3. Student Initial Model MVP：S0 → 17 项首次采集 → Voice / ASR → Evidence / Analysis → 自动构建与激活 → Current Model（已部署并通过 TEST Student 云端验证）
 4. Student Continuous Collection V1.0（已完成）
 5. 主体刻画综合协议、后续补充对话提醒与模型构建进度（已完成并进入 `1.0.6`）
 6. Teacher / Student 统一绑定协议（集合、主要函数、页面与安全回归已完成并进入 `1.0.6`）
@@ -211,7 +212,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 10. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
 11. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
 12. 规则驱动持续模型自动更新（已部署，已用 TEST Student 完成云端自动激活与幂等验证）
-13. 小程序开发候选版 `1.0.8` 上传（已完成）
+13. 小程序开发候选版 `1.0.9` 上传（已完成）
 14. 主体复现
 15. 双主体互动
 16. 模拟课堂

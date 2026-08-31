@@ -1,3 +1,7 @@
+const {
+  ensureTeacherInitialModel
+} = require('../../utils/initial-model-automation')
+
 Page({
 
   data: {
@@ -115,6 +119,7 @@ Page({
             ''
         })
 
+        await this.ensureInitialModel()
         await this.loadModelGuidance()
 
         return
@@ -185,6 +190,17 @@ Page({
       this.setData({
         initialProgressLoaded: true
       })
+    }
+  },
+
+
+  // 首次采集完成后幂等补分析、补建模。失败只影响模型暂时不可见，
+  // 不回滚已保存的 Voice / Message / Evidence / Analysis。
+  async ensureInitialModel() {
+    try {
+      await ensureTeacherInitialModel()
+    } catch (error) {
+      console.error('教师首次模型自动构建待重试：', error)
     }
   },
 

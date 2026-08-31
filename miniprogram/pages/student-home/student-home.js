@@ -1,3 +1,7 @@
+const {
+  ensureStudentInitialModel
+} = require('../../utils/initial-model-automation')
+
 Page({
   data: {
     loading: true,
@@ -93,6 +97,7 @@ Page({
       })
 
       if (completed) {
+        await this.ensureInitialModel(subjectId)
         await Promise.all([
           this.loadModelState(subjectId),
           this.loadModelGuidance(subjectId)
@@ -105,6 +110,14 @@ Page({
         title: '读取学生信息失败',
         icon: 'none'
       })
+    }
+  },
+
+  async ensureInitialModel(subjectId) {
+    try {
+      await ensureStudentInitialModel(subjectId)
+    } catch (error) {
+      console.error('学生首次模型自动构建待重试：', error)
     }
   },
 
@@ -134,9 +147,7 @@ Page({
         hasModel,
         modelStatus: hasModel ? result.model_status || '' : '',
         modelStatusText: hasModel
-          ? result.model_status === 'draft'
-            ? '待复核'
-            : '已复核'
+          ? result.model_status_name || '已自动构建'
           : '结果生成中'
       })
     } catch (error) {

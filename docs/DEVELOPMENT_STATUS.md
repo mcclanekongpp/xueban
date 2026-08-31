@@ -5,9 +5,42 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采开发版 `1.0.7` 已上传，但已被规则驱动自动 revision 候选版 `1.0.8` 替代。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。微信审核与正式发布状态仍必须以平台实际为准。
+候选版 `1.0.9` 已替代 `1.0.8`。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。Teacher / Student 首次模型自动构建、无人工审核激活以及 researcher/admin 只读构建总览也已部署；隔离 TEST Teacher / Student 已分别完成云端自动 Analysis、`automatic_initial` 激活、Subject 指针和重复调用幂等验证。`1.0.9` 已于 2026-08-31 19:07:57 CST 上传为开发版，尚未提交审核或正式发布。
 
-当前最高优先级：**完成隐私保护指引核对后提交 `1.0.8` 审核；继续用真人试采验证自动 revision 的证据质量和节奏**。
+当前最高优先级：**在微信公众平台完成隐私保护指引最终核对，提交 `1.0.9` 审核；审核通过后发布**。
+
+## 首次模型自动构建与研究者总览（已部署并完成 TEST 云端验证）
+
+- [x] Teacher 13/13 完成后先幂等补齐 pending initial Evidence Analysis，再自动构建并激活 Teacher-T0
+- [x] Student 17/17 完成后先幂等补齐 pending initial Evidence Analysis，再自动构建并激活 Student-M0，不再等待人工审核
+- [x] Teacher / Student Home 对“采集已完成但模型尚未生成”的情况自动幂等重试，已保存的采集数据不回滚
+- [x] initial snapshot 使用确定性 ID、`status = activating → active`、`activation_mode = automatic_initial` 和事务化 Subject 指针更新，重试不重复建模
+- [x] 既有 active 模型幂等复用，不重建或覆盖；历史 draft 在兼容路径中自动激活
+- [x] `approveStudentInitialModel` 不再执行新的人工审批写入，仅对已 active 历史请求幂等返回
+- [x] Teacher / Student pending initial Analysis 会校验 Evidence↔Analysis 的 subject/framework/variable 一致性，幂等修复缺失链接；重复或身份冲突时停止建模
+- [x] 证据不足/缺失的固定变量仍保留为“证据不足”，并通过 `construction_progress` 和 guidance 显示后续补充方向
+- [x] supportive 定义、Evidence Analysis 枚举、信度和持续 revision 自动门槛未降低
+- [x] `getSubjectModelGuidance(action = research_overview)` 只允许 researcher / admin，汇总 Teacher / Student 采集进度、当前模型版本、构建百分比、缺口数和优先提示
+- [x] 新增 `pages/research-overview/research-overview`；researcher/admin 登录后进入只读总览，普通 Teacher / Guardian 不获得跨主体数据
+- [x] 总览不返回原始 Voice/转写、Evidence 原文、Analysis reasoning、绑定码或线下编号哈希
+- [x] 所有云函数 `index.js`、小程序 JS 与 JSON 静态检查通过，Evidence Health 规则测试 PASS；开发者工具已编译新增总览页，未发现源码编译错误
+- [x] `analyzeTeacherEvidence`、`analyzeStudentEvidence`、`buildTeacherInitialModel`、`buildStudentInitialModel`、`approveStudentInitialModel`、`getTeacherCurrentModel`、`getStudentCurrentModel`、`getSubjectModelGuidance` 已部署到 `model-dev-d9gkoyaolb464c28d`
+- [x] TEST Teacher `T_MTDPQ1BX_31BF4` 自动分析并激活 `MS_INITIAL_3E9581CA002433B6ACD7`；13 变量完整，12 个缺失变量保留证据不足
+- [x] TEST Student `S_MTDPSUQM_B949A` 自动分析并激活 `MS_INITIAL_3CE1718346CC1C146125`；17 变量完整，16 个缺失变量保留证据不足
+- [x] 两个 TEST Subject 重复构建均返同一 snapshot，Subject 当前指针与 `automatic_initial` 一致
+- [x] TEST Student 构建进度以 17 为固定分母返回 4%，且返回后续补充提示；普通 Teacher 跨主体总览请求被正确拒绝
+- [x] `1.0.9` 已于 2026-08-31 19:07:57 CST 上传，代码包 828743 bytes
+
+## 真人试采候选版 1.0.9（2026-08-31）
+
+- [x] AppID = `wx962acbf120074da9`
+- [x] 云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] 包含 Teacher / Student 首次模型自动 Analysis、自动构建与 `automatic_initial` 激活
+- [x] 包含构建进度、后续补充提示与 researcher/admin 只读总览
+- [x] 全量 JavaScript / JSON / Evidence Health 检查通过，开发者工具编译通过，Console / Network 无阻断错误
+- [x] 上传时间 = 2026-08-31 19:07:57 CST，代码包 = 828743 bytes
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
 
 ## 持续模型规则驱动自动更新 V1.0（已部署并完成云端 TEST 验证）
 
@@ -67,11 +100,11 @@
 - [x] `variable_evidence_profiles` 与 `model_change_candidates` 已创建并设置 ADMINONLY
 - [x] Profile 严格使用 supportive 定义（relevant / partially_relevant + usable / weak）；覆盖度只由 supportive Evidence 贡献，unknown modality 不计有效多模态
 - [x] Evidence Gap 已以内嵌 Profile 状态进入主链：no_evidence、insufficient_detail、single_time_point、single_context、single_source、stale_evidence、contradiction_pending
-- [x] Contradiction 与 Stagnation 状态已进入主链；矛盾 pending 会阻断 draft，停滞 reason 不作为主体评价
-- [x] active snapshot 之后的新 continuous supportive usable Evidence 自动形成 Model Change Candidate；单条证据、weak、irrelevant、uncertain、insufficient 不能触发 draft
-- [x] 同一变量至少 2 条新的 supportive usable continuous Evidence 且无 pending contradiction 才允许 `eligible_for_draft = true`
-- [x] `build_draft`、`resolve_contradiction`、`approve_draft` 均为受控研究操作；普通 Teacher / Guardian 页面不能生成或批准模型
-- [x] 新版本只创建 revision draft；Human Review 后才 active，旧 snapshot 转 superseded 且历史内容不覆盖
+- [x] Contradiction 与 Stagnation 状态已进入主链；矛盾 pending 会阻断自动 revision，停滞 reason 不作为主体评价
+- [x] active snapshot 之后的新 continuous supportive usable Evidence 自动形成 Model Change Candidate；单条证据、weak、irrelevant、uncertain、insufficient 不能触发 revision
+- [x] 同一变量至少 2 条新 supportive usable continuous Evidence，且满足独立记录、覆盖度与无 pending contradiction 才允许自动更新
+- [x] `build_draft`、`resolve_contradiction`、`approve_draft` 仅作历史兼容/恢复能力；普通 Teacher / Guardian 页面不能指定候选、降低门槛或直接改模型
+- [x] 正常持续链达到严格规则后自动创建并激活 revision snapshot；旧 snapshot 转 superseded 且历史内容不覆盖
 - [x] 真实教师完整重建 13 个 Profile、27 个 open Gap、4 个 Candidate（1 个 draft eligible）；TEST Student 重建 17 个 Profile、41 个 open Gap、1 个 Candidate（未达 draft 门槛）
 - [x] 数据面核验为 30 个唯一 Profile、5 个唯一 Candidate；active Teacher snapshot `MS_MT873ZQI_9PEUL` 与 active Student snapshot `MS_MTBMDOF7_0MNQU` 未改变，均无 revision draft
 - [x] 正式教师受控 build_draft 被 `CONTROLLED_MODEL_OPERATION_FORBIDDEN` 拦截；TEST Student dry-run 返回 `NO_DRAFT_ELIGIBLE_CANDIDATES`
@@ -144,9 +177,9 @@
 
 - [x] `getSubjectModelGuidance` 新增只读 `construction_progress`：以教师 13 个、学生 17 个固定变量为完整分母，返回总体、一级维度和二级变量构建进度
 - [x] 变量进度 V1.0 固定为 active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%
-- [x] supportive 门槛保持 `relevant / partially_relevant + usable / weak`；irrelevant、uncertain、insufficient 不增加支持覆盖，进度不改变 confidence、模型采纳或人工审核规则
+- [x] supportive 门槛保持 `relevant / partially_relevant + usable / weak`；irrelevant、uncertain、insufficient 不增加支持覆盖，进度不改变 confidence、首次模型构建或持续更新规则
 - [x] Teacher / Student 模型页已按“100 字内总体概览 → 一级维度雷达图与百分比 → 具体变量信息”统一展示，并明确标注该指数不是能力、水平、质量或置信度评分
-- [x] `buildTeacherInitialModel` 升级为 `teacher_initial_model_v1.3`，`buildStudentInitialModel` 升级为 `student_initial_model_v1.2`；新 draft 必须生成覆盖固定一级维度、100 字以内且无评价性语言的 `model_data.overview_summary`
+- [x] `buildTeacherInitialModel` 升级为 `teacher_initial_model_v1.3`，`buildStudentInitialModel` 升级为 `student_initial_model_v1.2`；新 initial snapshot 必须生成覆盖固定一级维度、100 字以内且无评价性语言的 `model_data.overview_summary`
 - [x] 已有 active Teacher / TEST Student snapshot 保持不可变；旧 snapshot 页面使用只读构建状态摘要兼容，不回写或重建历史模型
 - [x] `getSubjectModelGuidance`、`buildTeacherInitialModel`、`buildStudentInitialModel`、`getStudentCurrentModel` 已部署到 `model-dev-d9gkoyaolb464c28d`；未调用模型构建函数
 - [x] 真实教师只读结果：总体 74%，T1—T5 = 70 / 60 / 97 / 60 / 85；TEST Student 只读结果：总体 77%，S1—S6 = 70 / 80 / 70 / 80 / 85 / 80
@@ -167,7 +200,7 @@
 - [x] 提醒卡片到教师 `voice-chat`、学生 `student-continuous` 的导航和提示透传已在开发者工具验证；后台实际路由不接收提示变量
 - [x] 59 个 JavaScript 文件通过 `node --check`，项目 JSON 解析通过，6 个相关 WXML 与 2 个相关 WXSS 编译通过，Simulator Console 无 error
 - [x] 本轮小程序页面改动已随 `1.0.6` 上传为开发版本
-- [ ] 改进后的模型综合协议需在新的真实主体完成首次采集后，以 draft → Human Review 验证输出质量；不得用旧 active snapshot 做静默覆盖测试
+- [ ] 改进后的模型综合协议需在新的真实主体完成首次采集后，验证自动 initial snapshot 的证据忠实度和结构完整性；不得用旧 active snapshot 做静默覆盖测试
 
 ## 真人试采候选版本 1.0.5（2026-08-28）
 
@@ -216,7 +249,7 @@
 ## Student Continuous Collection V1.0（2026-08-28）
 
 - [x] Student Home 在首次采集 17/17 后显示“查看首次建模结果”和“再说一说”
-- [x] `student-model` active 实测显示 S1—S6、17 变量；draft 分支显示“首次建模结果（待复核）”
+- [x] `student-model` active 实测显示 S1—S6、17 变量；历史 draft 兼容分支的新文案为“首次建模结果（生成中）”
 - [x] 页面不显示分数、排名、人格类型、心理诊断、原始录音或 Evidence Analysis reasoning
 - [x] `createSession` 支持 `student_continuous_record`，并验证当前 user 的 active Guardian binding
 - [x] `student-continuous` 复用 `wx.getRecorderManager`、`saveVoiceRecord` 与 `transcribeVoice`
@@ -239,6 +272,8 @@
 - [x] 审核用虚拟 student_no 与一次性 bind code 记录在 `docs/REVIEW_TEST.md`，不进入小程序代码包
 
 ## Student Initial Model MVP（2026-08-28）
+
+> 以下 draft 与人工确认为当时技术闭环的历史验收记录。2026-08-31 后的新正式规则已改为首次模型自动构建/激活，不再产生新的人工审核写入。
 
 - [x] Student S0 复用 `subject_background`，由 School / Class / Student Subject 自动形成
 - [x] `student_v1.0` 17 个儿童友好首次语音任务已写入 `collection_tasks`
@@ -380,7 +415,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 ## 六、当前第一优先级
 
-先部署并验证规则驱动自动 revision，生成新的候选版本，再完成微信公众平台隐私保护指引核对、提交审核和发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
+在微信公众平台完成隐私保护指引最终核对，提交 `1.0.9` 审核；审核通过后发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
 
 ## 七、学生端状态
 
@@ -405,8 +440,8 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 - [x] 学生 Evidence
 - [x] 学生 Evidence Analysis
 - [x] Student-M0 生成
-- [x] Student-M0 审核
-- [x] 学生首次模型安全展示（绑定用户可查看 draft / active 安全摘要）
+- [x] Student-M0 自动构建/激活（本地新规则已完成，待云端验证）
+- [x] 学生首次模型安全展示（绑定用户可查看本人 Student 安全摘要）
 - [x] Student Continuous Collection V1.0
 - [ ] 行为观察入口
 - [ ] 图片/作品等多模态

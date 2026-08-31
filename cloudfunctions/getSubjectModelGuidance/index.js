@@ -111,7 +111,11 @@ function isSupportive(analysis) {
 async function loadAll(collection, where, max = 500) {
   const rows = []
   for (let offset = 0; offset < max; offset += 100) {
-    const result = await db.collection(collection).where(where).skip(offset).limit(100).get()
+    const baseQuery = db.collection(collection)
+    const query = where && Object.keys(where).length > 0
+      ? baseQuery.where(where)
+      : baseQuery
+    const result = await query.skip(offset).limit(100).get()
     rows.push(...result.data)
     if (result.data.length < 100) break
   }
@@ -293,6 +297,207 @@ function buildConstructionProgress(variables, evidenceByVariable, pairsByVariabl
   }
 }
 
+function latestByCreatedAt(items) {
+  return [...items].sort((a, b) => (
+    timeValue(b.updated_at || b.created_at) -
+    timeValue(a.updated_at || a.created_at)
+  ))[0] || null
+}
+
+async function buildResearchOverview(event, user) {
+  if (!['researcher', 'admin'].includes(user.role)) {
+    return {
+      success: false,
+      code: 'RESEARCH_MODEL_OVERVIEW_FORBIDDEN',
+      message: '只有 researcher / admin 可以查看跨主体模型构建总览'
+    }
+  }
+
+  const requestedType = ['teacher', 'student'].includes(event.subject_type)
+    ? event.subject_type
+    : ''
+  const requestedSchoolId = String(event.school_id || '').trim()
+  const requestedClassId = String(event.class_id || '').trim()
+  const [subjects, progressRows, snapshots, evidenceRows, analysisRows, memberships, classes] = await Promise.all([
+    loadAll('subjects', { status: 'active' }, 1000),
+    loadAll('collection_progress', {}, 1000),
+    loadAll('model_snapshots', { status: 'active' }, 1000),
+    loadAll('evidence', { status: 'active' }, 2000),
+    loadAll('evidence_analysis', { status: 'active' }, 2000),
+    loadAll('class_memberships', { status: 'active' }, 1000),
+    loadAll('classes', { status: 'active' }, 1000)
+  ])
+
+  const schoolByClass = new Map(classes.map(item => [item.class_id, item.school_id || '']))
+
+  const membershipsBySubject = new Map()
+  for (const membership of memberships) {
+    if (!membershipsBySubject.has(membership.subject_id)) {
+      membershipsBySubject.set(membership.subject_id, [])
+    }
+    membershipsBySubject.get(membership.subject_id).push(membership)
+  }
+
+  const latestAnalysisByEvidence = new Map()
+  for (const raw of [...analysisRows].sort((a, b) => (
+    timeValue(b.updated_at || b.analyzed_at || b.created_at) -
+    timeValue(a.updated_at || a.analyzed_at || a.created_at)
+  ))) {
+    if (raw.evidence_id && !latestAnalysisByEvidence.has(raw.evidence_id)) {
+      latestAnalysisByEvidence.set(raw.evidence_id, normalizeAnalysis(raw))
+    }
+  }
+
+  const rows = []
+
+  for (const subject of subjects) {
+    const subjectType = subject.subject_type
+    const framework = subject.model_framework || subject.framework || ''
+
+    if (!['teacher', 'student'].includes(subjectType)) continue
+    if (requestedType && subjectType !== requestedType) continue
+    if (
+      (subjectType === 'teacher' && framework !== 'teacher_v1.0') ||
+      (subjectType === 'student' && framework !== 'student_v1.0')
+    ) continue
+
+    const subjectMemberships = membershipsBySubject.get(subject.subject_id) || []
+    if (requestedClassId && !subjectMemberships.some(item => item.class_id === requestedClassId)) {
+      continue
+    }
+    if (requestedSchoolId && !subjectMemberships.some(item => (
+      (item.school_id || schoolByClass.get(item.class_id) || '') === requestedSchoolId
+    ))) {
+      continue
+    }
+
+    const subjectEvidence = evidenceRows.filter(item => (
+      item.subject_id === subject.subject_id &&
+      (!item.subject_type || item.subject_type === subjectType) &&
+      (!item.framework || item.framework === framework)
+    ))
+    const evidenceByVariable = new Map()
+    const pairsByVariable = new Map()
+
+    for (const evidence of subjectEvidence) {
+      if (!evidenceByVariable.has(evidence.variable_id)) {
+        evidenceByVariable.set(evidence.variable_id, [])
+      }
+      evidenceByVariable.get(evidence.variable_id).push(evidence)
+
+      const analysis = latestAnalysisByEvidence.get(evidence.evidence_id)
+      if (!analysis || !isConsistent(analysis, evidence, subject.subject_id, framework)) continue
+      if (!pairsByVariable.has(evidence.variable_id)) {
+        pairsByVariable.set(evidence.variable_id, [])
+      }
+      pairsByVariable.get(evidence.variable_id).push({ evidence, analysis })
+    }
+
+    const variables = toVariableObjects(subjectType)
+    const constructionProgress = buildConstructionProgress(
+      variables,
+      evidenceByVariable,
+      pairsByVariable
+    )
+    const subjectSnapshots = snapshots.filter(item => (
+      item.subject_id === subject.subject_id &&
+      (!item.subject_type || item.subject_type === subjectType) &&
+      (!item.framework || item.framework === framework)
+    ))
+    const snapshot = latestByCreatedAt(subjectSnapshots)
+    const initialProgress = latestByCreatedAt(progressRows.filter(item => (
+      item.subject_id === subject.subject_id &&
+      (!item.subject_type || item.subject_type === subjectType) &&
+      (!item.framework || item.framework === framework) &&
+      (!item.collection_phase || item.collection_phase === 'initial')
+    )))
+    const guidance = variables
+      .map(variable => buildGuidanceItem(
+        subjectType,
+        variable,
+        pairsByVariable.get(variable.variable_id) || [],
+        findModelVariable(snapshot && snapshot.model_data, variable.variable_id)
+      ))
+      .sort((a, b) => b.priority - a.priority || a.variable_id.localeCompare(b.variable_id))
+      .slice(0, 3)
+      .map(item => ({
+        dimension_id: item.dimension_id,
+        dimension_name: item.dimension_name,
+        variable_id: item.variable_id,
+        variable_name: item.variable_name,
+        gap_type: item.gap_type,
+        reason_text: item.reason_text,
+        prompt_text: item.prompt_text,
+        priority: item.priority
+      }))
+    const completedCount = Number(
+      initialProgress && (initialProgress.completed_tasks || initialProgress.completed_count) || 0
+    )
+    const totalTasks = subjectType === 'teacher' ? 13 : 17
+
+    rows.push({
+      subject_id: subject.subject_id,
+      subject_type: subjectType,
+      framework,
+      research_alias: String(subject.research_alias || '').trim(),
+      is_test: subject.is_test === true,
+      class_ids: unique(subjectMemberships.map(item => item.class_id)),
+      school_ids: unique(subjectMemberships.map(item => (
+        item.school_id || schoolByClass.get(item.class_id) || ''
+      ))),
+      initial_collection: {
+        status: initialProgress ? initialProgress.status || 'not_started' : 'not_started',
+        completed_count: completedCount,
+        total_tasks: totalTasks,
+        completed: Boolean(initialProgress && initialProgress.status === 'completed' && completedCount === totalTasks)
+      },
+      current_model: snapshot
+        ? {
+          has_model: true,
+          snapshot_id: snapshot.snapshot_id || '',
+          snapshot_type: snapshot.snapshot_type || snapshot.model_type || '',
+          model_version: snapshot.model_version || snapshot.version || '',
+          status: snapshot.status || '',
+          activation_mode: snapshot.activation_mode || '',
+          updated_at: snapshot.updated_at || snapshot.created_at || null
+        }
+        : {
+          has_model: false,
+          snapshot_id: '',
+          snapshot_type: '',
+          model_version: '',
+          status: '',
+          activation_mode: '',
+          updated_at: null
+        },
+      construction_progress: constructionProgress,
+      gap_variable_count: constructionProgress.variables.filter(item => item.supportive_evidence_count === 0).length,
+      guidance
+    })
+  }
+
+  rows.sort((a, b) => (
+    a.subject_type.localeCompare(b.subject_type) ||
+    String(a.research_alias || a.subject_id).localeCompare(String(b.research_alias || b.subject_id))
+  ))
+
+  return {
+    success: true,
+    action: 'research_overview',
+    access_scope: 'researcher_admin_only',
+    generated_at: new Date().toISOString(),
+    summary: {
+      subject_count: rows.length,
+      teacher_count: rows.filter(item => item.subject_type === 'teacher').length,
+      student_count: rows.filter(item => item.subject_type === 'student').length,
+      initial_collection_completed_count: rows.filter(item => item.initial_collection.completed).length,
+      active_model_count: rows.filter(item => item.current_model.has_model).length
+    },
+    subjects: rows,
+    note: '构建进度只表示固定维度的证据覆盖与持续积累，不评价教师或学生。'
+  }
+}
+
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
   const requestedType = event.subject_type === 'student' ? 'student' : 'teacher'
@@ -308,6 +513,11 @@ exports.main = async (event = {}) => {
     }
 
     const user = userResult.data[0]
+
+    if (event.action === 'research_overview') {
+      return await buildResearchOverview(event, user)
+    }
+
     let subjectId = ''
     let framework = ''
 

@@ -3,6 +3,11 @@
 const recorderManager =
   wx.getRecorderManager()
 
+const {
+  analyzePendingTeacherInitialEvidence,
+  ensureTeacherInitialModel
+} = require('../../utils/initial-model-automation')
+
 function decodeQueryValue(value) {
   try {
     return decodeURIComponent(String(value || ''))
@@ -384,6 +389,13 @@ Page({
             canCompleteTask:
               false
           })
+
+
+          try {
+            await ensureTeacherInitialModel()
+          } catch (modelError) {
+            console.error('恢复教师首次模型自动构建失败：', modelError)
+          }
 
 
           return
@@ -1360,17 +1372,46 @@ Page({
           })
 
 
+          let modelReady = false
+
+          try {
+            wx.showLoading({
+              title: '正在构建模型',
+              mask: true
+            })
+            await ensureTeacherInitialModel()
+            modelReady = true
+          } catch (modelError) {
+            // 首次采集与原始证据已经提交完成。AI 暂时失败时不回滚，
+            // Teacher Home 会再次幂等补分析、补建模。
+            console.error('教师首次模型自动构建待重试：', modelError)
+          } finally {
+            wx.hideLoading()
+          }
+
+
           wx.showToast({
 
             title:
-              '首次采集已完成',
+              modelReady
+                ? '首次模型已自动生成'
+                : '采集完成，模型生成中',
 
             icon:
-              'success'
+              modelReady ? 'success' : 'none'
           })
 
 
           return
+        }
+
+
+        // 当前任务 Evidence 在进入下一题前完成正式分析。失败不丢失
+        // 任务、Voice 或 Evidence；后续页面会自动补分析。
+        try {
+          await analyzePendingTeacherInitialEvidence()
+        } catch (analysisError) {
+          console.error('教师首次 Evidence 分析待重试：', analysisError)
         }
 
 

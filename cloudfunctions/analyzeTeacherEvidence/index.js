@@ -1111,6 +1111,126 @@ async function analyzeBatch(evidenceIds) {
 }
 
 
+// 首次采集任务推进与 AI 分析是两个可恢复步骤。若用户在任务完成后
+// 立即退出，首页会调用本动作补齐当前教师尚未分析的首次 Evidence。
+// 只处理当前 OPENID 映射的 Teacher Subject，不接受前端 subject_id。
+async function analyzePendingInitialEvidence(openid) {
+  const userResult = await db.collection('users').where({ openid }).limit(2).get()
+
+  if (userResult.data.length !== 1 || userResult.data[0].role !== 'teacher') {
+    return {
+      success: false,
+      code: 'NOT_TEACHER',
+      message: '当前账号不是有效教师身份'
+    }
+  }
+
+  const user = userResult.data[0]
+  const mapResult = await db.collection('identity_map').where({
+    user_id: user.user_id,
+    identity_type: 'teacher'
+  }).limit(2).get()
+
+  if (mapResult.data.length !== 1) {
+    return {
+      success: false,
+      code: 'TEACHER_SUBJECT_INVALID',
+      message: '教师主体不存在或存在重复'
+    }
+  }
+
+  const subjectId = mapResult.data[0].subject_id
+  const [evidenceResult, analysisResult] = await Promise.all([
+    db.collection('evidence').where({
+      subject_id: subjectId,
+      subject_type: 'teacher',
+      framework: 'teacher_v1.0',
+      source_type: 'initial_interview',
+      status: 'active'
+    }).limit(100).get(),
+    db.collection('evidence_analysis').where({
+      subject_id: subjectId,
+      subject_type: 'teacher',
+      framework: 'teacher_v1.0',
+      status: 'active'
+    }).limit(100).get()
+  ])
+  const initialEvidenceIds = new Set(
+    evidenceResult.data.map(item => item.evidence_id).filter(Boolean)
+  )
+  const analysesByEvidence = new Map()
+
+  for (const analysis of analysisResult.data) {
+    if (!initialEvidenceIds.has(analysis.evidence_id)) continue
+    if (!analysesByEvidence.has(analysis.evidence_id)) analysesByEvidence.set(analysis.evidence_id, [])
+    analysesByEvidence.get(analysis.evidence_id).push(analysis)
+  }
+
+  const duplicateEvidenceId = [...analysesByEvidence.entries()]
+    .find(([, analyses]) => analyses.length > 1)
+
+  if (duplicateEvidenceId) {
+    return {
+      success: false,
+      code: 'DUPLICATE_TEACHER_EVIDENCE_ANALYSIS',
+      evidence_id: duplicateEvidenceId[0],
+      message: '教师证据存在重复有效分析'
+    }
+  }
+
+  const inconsistentEvidence = evidenceResult.data.find((evidence) => {
+    const analysis = (analysesByEvidence.get(evidence.evidence_id) || [])[0]
+    if (!analysis) return false
+    if (analysis.subject_id && analysis.subject_id !== subjectId) return true
+    if (analysis.framework && analysis.framework !== 'teacher_v1.0') return true
+    if (analysis.variable_id && analysis.variable_id !== evidence.variable_id) return true
+    return false
+  })
+
+  if (inconsistentEvidence) {
+    return {
+      success: false,
+      code: 'TEACHER_EVIDENCE_ANALYSIS_IDENTITY_MISMATCH',
+      evidence_id: inconsistentEvidence.evidence_id,
+      message: '教师证据与有效分析的主体或变量字段不一致'
+    }
+  }
+
+  const pendingIds = evidenceResult.data
+    .filter((evidence) => {
+      const analysis = (analysesByEvidence.get(evidence.evidence_id) || [])[0]
+      return !analysis || evidence.analysis_status !== 'completed' || evidence.analysis_id !== analysis.analysis_id
+    })
+    .map(item => item.evidence_id)
+    .filter(Boolean)
+  const batches = []
+
+  for (let offset = 0; offset < pendingIds.length; offset += 5) {
+    const batch = await analyzeBatch(pendingIds.slice(offset, offset + 5))
+    batches.push(batch)
+    if (!batch.success) break
+  }
+
+  const failed = batches.find(item => item.success !== true)
+
+  return {
+    success: !failed,
+    action: 'analyze_pending_initial',
+    subject_id: subjectId,
+    pending_count: pendingIds.length,
+    analyzed_count: batches.reduce((sum, item) => sum + Number(item.saved_count || 0), 0),
+    failed_count: batches.reduce((sum, item) => sum + Number(item.failed_count || 0), 0),
+    batches,
+    code: failed ? 'PENDING_INITIAL_ANALYSIS_INCOMPLETE' : '',
+    message: failed
+      ? '部分首次证据仍未完成分析，原始记录已保留，可再次重试'
+      : pendingIds.length > 0
+        ? '教师首次证据分析已补齐'
+        : '没有待补分析的教师首次证据'
+  }
+}
+
+
 // ==================================================
 // 主函数
 // ==================================================
@@ -1166,6 +1286,22 @@ exports.main =
       return await analyzeBatch(
         event && event.evidence_ids
       )
+    }
+
+
+    if (
+      action ===
+      'analyze_pending_initial'
+    ) {
+      if (!openid) {
+        return {
+          success: false,
+          code: 'NO_OPENID',
+          message: '未获取到微信用户标识'
+        }
+      }
+
+      return await analyzePendingInitialEvidence(openid)
     }
 
 
@@ -1598,6 +1734,24 @@ exports.main =
           .data[0]
 
 
+      if (
+        evidence.analysis_status !== 'completed' ||
+        evidence.analysis_id !== existingAnalysis.analysis_id
+      ) {
+        await db
+          .collection('evidence')
+          .doc(evidence._id)
+          .update({
+            data: {
+              analysis_status: 'completed',
+              analysis_id: existingAnalysis.analysis_id,
+              analyzed_at: existingAnalysis.updated_at || existingAnalysis.created_at || db.serverDate(),
+              updated_at: db.serverDate()
+            }
+          })
+      }
+
+
       return {
         success: true,
 
@@ -2018,6 +2172,24 @@ exports.main =
       const existingAnalysis =
         secondCheckResult
           .data[0]
+
+
+      if (
+        evidence.analysis_status !== 'completed' ||
+        evidence.analysis_id !== existingAnalysis.analysis_id
+      ) {
+        await db
+          .collection('evidence')
+          .doc(evidence._id)
+          .update({
+            data: {
+              analysis_status: 'completed',
+              analysis_id: existingAnalysis.analysis_id,
+              analyzed_at: existingAnalysis.updated_at || existingAnalysis.created_at || db.serverDate(),
+              updated_at: db.serverDate()
+            }
+          })
+      }
 
 
       return {

@@ -1,0 +1,62 @@
+<view class="page">
+  <view class="header">
+    <view class="header-title">主体模型构建总览</view>
+    <view class="header-desc">只读查看教师与学生的采集、模型版本和证据覆盖情况</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-card">正在读取构建情况…</view>
+  <view wx:elif="{{errorMessage}}" class="state-card error-card">
+    <view>{{errorMessage}}</view>
+    <button class="retry-button" bindtap="loadOverview">重新读取</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{summary}}" class="summary-grid">
+      <view class="summary-card"><view class="summary-value">{{summary.subject_count}}</view><view class="summary-label">主体</view></view>
+      <view class="summary-card"><view class="summary-value">{{summary.teacher_count}}</view><view class="summary-label">教师</view></view>
+      <view class="summary-card"><view class="summary-value">{{summary.student_count}}</view><view class="summary-label">学生</view></view>
+      <view class="summary-card"><view class="summary-value">{{summary.active_model_count}}</view><view class="summary-label">已有模型</view></view>
+    </view>
+
+    <view class="filters">
+      <view class="filter {{filter === 'all' ? 'filter-active' : ''}}" data-filter="all" bindtap="changeFilter">全部</view>
+      <view class="filter {{filter === 'teacher' ? 'filter-active' : ''}}" data-filter="teacher" bindtap="changeFilter">教师</view>
+      <view class="filter {{filter === 'student' ? 'filter-active' : ''}}" data-filter="student" bindtap="changeFilter">学生</view>
+    </view>
+
+    <view wx:if="{{subjects.length === 0}}" class="state-card">当前没有符合条件的主体</view>
+
+    <view wx:for="{{subjects}}" wx:key="subject_id" class="subject-card">
+      <view class="subject-top">
+        <view>
+          <view class="subject-name">{{item.display_name}}</view>
+          <view class="subject-id">{{item.subject_id}}</view>
+        </view>
+        <view class="type-tag type-{{item.subject_type}}">{{item.subject_type_name}}</view>
+      </view>
+
+      <view class="meta-row">
+        <view>首次采集</view>
+        <view>{{item.initial_collection.completed_count}} / {{item.initial_collection.total_tasks}}</view>
+      </view>
+      <view class="meta-row">
+        <view>当前模型</view>
+        <view>{{item.model_version_text}}</view>
+      </view>
+      <view class="meta-row">
+        <view>构建进度</view>
+        <view class="progress-value">{{item.construction_percent}}%</view>
+      </view>
+      <view class="progress-track"><view class="progress-fill" style="width: {{item.construction_percent}}%;"></view></view>
+      <view class="coverage-note">仍需补充的变量：{{item.gap_variable_count}}；班级：{{item.class_text}}</view>
+
+      <view wx:if="{{item.top_guidance}}" class="guidance-box">
+        <view class="guidance-title">优先补充：{{item.top_guidance.variable_name}}</view>
+        <view class="guidance-text">{{item.top_guidance.reason_text}}</view>
+      </view>
+      <view wx:if="{{item.model_updated_text}}" class="updated-text">模型更新时间：{{item.model_updated_text}}</view>
+    </view>
+
+    <view class="page-note">构建进度只表示固定维度的证据覆盖与持续积累，不评价教师或学生。</view>
+  </block>
+</view>

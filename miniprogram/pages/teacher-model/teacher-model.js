@@ -45,7 +45,7 @@ Page({
 
     modelStatus: 'active',
 
-    modelStatusName: '已复核',
+    modelStatusName: '已生效',
 
     modelUpdatedAt: '',
 
@@ -256,7 +256,7 @@ Page({
 
         modelStatusName:
           result.model_status_name ||
-          '已复核',
+          '已生效',
 
         modelUpdatedAt:
           formatDate(

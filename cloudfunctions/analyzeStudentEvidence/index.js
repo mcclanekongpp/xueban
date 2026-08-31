@@ -252,6 +252,136 @@ async function analyzeBatch(evidenceIds) {
   }
 }
 
+// 首次采集进度和 Evidence Analysis 是两个可恢复步骤。
+// Student Home 在 17/17 后使用本动作补齐当前 Student
+// 尚未归档的首次 Analysis，不接受前端 user_id。
+async function analyzePendingInitialEvidence(openid, subjectId) {
+  if (!openid || !subjectId) {
+    return {
+      success: false,
+      code: !openid ? 'NO_OPENID' : 'STUDENT_SUBJECT_ID_REQUIRED',
+      message: !openid ? '未获取到微信用户标识' : '缺少学生研究主体编号'
+    }
+  }
+
+  const userResult = await db.collection('users').where({ openid }).limit(2).get()
+  if (userResult.data.length !== 1) {
+    return { success: false, code: 'USER_NOT_FOUND', message: '当前用户不存在' }
+  }
+
+  const user = userResult.data[0]
+  const [bindingResult, subjectResult] = await Promise.all([
+    db.collection('guardian_student_bindings').where({
+      user_id: user.user_id,
+      subject_id: subjectId,
+      status: 'active'
+    }).limit(2).get(),
+    db.collection('subjects').where({
+      subject_id: subjectId,
+      subject_type: 'student',
+      model_framework: 'student_v1.0',
+      status: 'active'
+    }).limit(2).get()
+  ])
+
+  if (subjectResult.data.length !== 1) {
+    return { success: false, code: 'STUDENT_SUBJECT_NOT_ACTIVE', message: '学生研究主体不存在或已失效' }
+  }
+  if (bindingResult.data.length > 1) {
+    return { success: false, code: 'DUPLICATE_ACTIVE_STUDENT_BINDINGS', message: '学生采集绑定存在重复' }
+  }
+  if (bindingResult.data.length !== 1 && !['researcher', 'admin'].includes(user.role)) {
+    return { success: false, code: 'STUDENT_BINDING_NOT_ACTIVE', message: '当前微信没有该学生的有效采集绑定' }
+  }
+
+  const [evidenceResult, analysisResult] = await Promise.all([
+    db.collection('evidence').where({
+      subject_id: subjectId,
+      subject_type: 'student',
+      framework: 'student_v1.0',
+      source_type: 'initial_interview',
+      status: 'active'
+    }).limit(100).get(),
+    db.collection('evidence_analysis').where({
+      subject_id: subjectId,
+      subject_type: 'student',
+      framework: 'student_v1.0',
+      status: 'active'
+    }).limit(100).get()
+  ])
+
+  const initialEvidenceIds = new Set(
+    evidenceResult.data.map(item => item.evidence_id).filter(Boolean)
+  )
+  const analysesByEvidence = new Map()
+  for (const analysis of analysisResult.data) {
+    if (!initialEvidenceIds.has(analysis.evidence_id)) continue
+    if (!analysesByEvidence.has(analysis.evidence_id)) analysesByEvidence.set(analysis.evidence_id, [])
+    analysesByEvidence.get(analysis.evidence_id).push(analysis)
+  }
+
+  const duplicateEvidenceId = [...analysesByEvidence.entries()]
+    .find(([, analyses]) => analyses.length > 1)
+  if (duplicateEvidenceId) {
+    return {
+      success: false,
+      code: 'DUPLICATE_STUDENT_EVIDENCE_ANALYSIS',
+      evidence_id: duplicateEvidenceId[0],
+      message: '学生证据存在重复有效分析'
+    }
+  }
+
+  const inconsistentEvidence = evidenceResult.data.find((evidence) => {
+    const analysis = (analysesByEvidence.get(evidence.evidence_id) || [])[0]
+    if (!analysis) return false
+    if (analysis.subject_id && analysis.subject_id !== subjectId) return true
+    if (analysis.framework && analysis.framework !== 'student_v1.0') return true
+    if (analysis.variable_id && analysis.variable_id !== evidence.variable_id) return true
+    return false
+  })
+
+  if (inconsistentEvidence) {
+    return {
+      success: false,
+      code: 'STUDENT_EVIDENCE_ANALYSIS_IDENTITY_MISMATCH',
+      evidence_id: inconsistentEvidence.evidence_id,
+      message: '学生证据与有效分析的主体或变量字段不一致'
+    }
+  }
+
+  const pendingIds = evidenceResult.data
+    .filter((evidence) => {
+      const analysis = (analysesByEvidence.get(evidence.evidence_id) || [])[0]
+      return !analysis || evidence.analysis_status !== 'completed' || evidence.analysis_id !== analysis.analysis_id
+    })
+    .map(item => item.evidence_id)
+    .filter(Boolean)
+  const batches = []
+
+  for (let offset = 0; offset < pendingIds.length; offset += 5) {
+    const batch = await analyzeBatch(pendingIds.slice(offset, offset + 5))
+    batches.push(batch)
+    if (!batch.success) break
+  }
+
+  const failed = batches.find(item => item.success !== true)
+  return {
+    success: !failed,
+    action: 'analyze_pending_initial',
+    subject_id: subjectId,
+    pending_count: pendingIds.length,
+    analyzed_count: batches.reduce((sum, item) => sum + Number(item.saved_count || 0), 0),
+    failed_count: batches.reduce((sum, item) => sum + Number(item.failed_count || 0), 0),
+    batches,
+    code: failed ? 'PENDING_INITIAL_ANALYSIS_INCOMPLETE' : '',
+    message: failed
+      ? '部分学生首次证据仍未完成分析，原始记录已保留，可再次重试'
+      : pendingIds.length > 0
+        ? '学生首次证据分析已补齐'
+        : '没有待补分析的学生首次证据'
+  }
+}
+
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
   const action = String(event.action || '').trim()
@@ -265,6 +395,22 @@ exports.main = async (event = {}) => {
         success: false,
         code: 'ROUTE_STUDENT_CONTINUOUS_RECORD_ERROR',
         message: error.message || '学生持续语音整理失败'
+      }
+    }
+  }
+
+  if (action === 'analyze_pending_initial') {
+    try {
+      return await analyzePendingInitialEvidence(
+        openid,
+        String(event.subject_id || '').trim()
+      )
+    } catch (error) {
+      console.error('analyzePendingStudentInitialEvidence error:', error)
+      return {
+        success: false,
+        code: 'ANALYZE_PENDING_STUDENT_INITIAL_ERROR',
+        message: error.message || '学生首次证据自动补分析失败'
       }
     }
   }
@@ -322,7 +468,15 @@ exports.main = async (event = {}) => {
       status: 'active'
     }).limit(2).get()
 
-    if (bindingResult.data.length !== 1) {
+    if (bindingResult.data.length > 1) {
+      return {
+        success: false,
+        code: 'DUPLICATE_ACTIVE_STUDENT_BINDINGS',
+        message: '学生采集绑定存在重复'
+      }
+    }
+
+    if (bindingResult.data.length !== 1 && !['researcher', 'admin'].includes(user.role)) {
       return {
         success: false,
         code: 'STUDENT_BINDING_NOT_ACTIVE',
@@ -386,13 +540,24 @@ exports.main = async (event = {}) => {
     }
 
     if (existingResult.data.length === 1) {
+      const existing = existingResult.data[0]
+      if (evidence.analysis_status !== 'completed' || evidence.analysis_id !== existing.analysis_id) {
+        await db.collection('evidence').doc(evidence._id).update({
+          data: {
+            analysis_status: 'completed',
+            analysis_id: existing.analysis_id,
+            analyzed_at: existing.updated_at || existing.created_at || db.serverDate(),
+            updated_at: db.serverDate()
+          }
+        })
+      }
       return {
         success: true,
         already_analyzed: true,
         saved: true,
         evidence_id: evidenceId,
-        analysis_id: existingResult.data[0].analysis_id,
-        analysis: existingResult.data[0]
+        analysis_id: existing.analysis_id,
+        analysis: existing
       }
     }
 
@@ -486,13 +651,24 @@ exports.main = async (event = {}) => {
     }).limit(2).get()
 
     if (secondCheck.data.length > 0) {
+      const existing = secondCheck.data[0]
+      if (evidence.analysis_status !== 'completed' || evidence.analysis_id !== existing.analysis_id) {
+        await db.collection('evidence').doc(evidence._id).update({
+          data: {
+            analysis_status: 'completed',
+            analysis_id: existing.analysis_id,
+            analyzed_at: existing.updated_at || existing.created_at || db.serverDate(),
+            updated_at: db.serverDate()
+          }
+        })
+      }
       return {
         success: true,
         already_analyzed: true,
         saved: true,
         evidence_id: evidenceId,
-        analysis_id: secondCheck.data[0].analysis_id,
-        analysis: secondCheck.data[0]
+        analysis_id: existing.analysis_id,
+        analysis: existing
       }
     }
 

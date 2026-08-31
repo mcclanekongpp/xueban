@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证；小程序开发候选版 `1.0.8` 已上传。`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
+规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证。Teacher / Student 首次模型自动分析、构建和 `automatic_initial` 激活也已部署，并由隔离 TEST Teacher / Student 验证固定 13 / 17 变量、Subject 指针和幂等性。小程序开发候选版 `1.0.9` 已上传。`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -125,15 +125,15 @@ Evidence Analysis 不直接生成主体模型结论。
 
 当前 TEST Student active snapshot：`MS_AUTO_964A2C6C7C1C4C278E187881`，status = active，framework = student_v1.0，model_type / snapshot_type = revision，version / model_version = 1.1，`activation_mode = automatic_rule`。其父快照 `MS_MTBMDOF7_0MNQU` 仍保留，status = superseded，version = 1.0，`is_test = true`。
 
-学生首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、model_provider、model_name、status、is_test、approved_at、approved_by_user_id、created_at、updated_at。`model_data` 固定含 `overview_summary`、S1—S6 与 17 个变量，每变量保存 current_status、current_description、evidence_ids、evidence_count、evidence_summary、contexts、uncertainty、updated_at；不保存总分、排名或固定人格类型。新 Student 初始 draft 使用 `generation_method = ai_evidence_synthesis`、`generation_protocol = student_initial_model_v1.2`；教师新初始 draft 使用 `teacher_initial_model_v1.3`。`overview_summary` 不超过 100 字，必须覆盖各自全部一级维度且不得使用能力、水平、分数、排名或诊断表达；协议均禁止把转写或 extracted_points 直接拼接为主体刻画。
+首次 snapshot 字段包括 snapshot_id、subject_id、subject_type、framework、model_type、snapshot_type、version、model_version、source_type、background_id、collection_progress_id、model_data、source_evidence_ids[]、source_analysis_ids[]、source_evidence_count、generation_method、generation_protocol、model_provider、model_name、status、is_test、activation_mode、activation_rule_version、activated_at、auto_activated_at、auto_activated_by、triggered_by_user_id、created_at、updated_at。`model_data` 固定含 `overview_summary`、Teacher T1—T5 / Student S1—S6 和对应的全部 13 / 17 个变量，每变量保存当前状态、描述、Evidence 引用、情境和不确定性；不保存总分、排名或固定人格类型。新 Student 初始模型使用 `generation_method = ai_evidence_synthesis`、`generation_protocol = student_initial_model_v1.2`；教师新初始模型使用 `teacher_initial_model_v1.3`。新规则先以确定性文档 ID 写入 `status = activating`，再通过事务置为 `active`并更新 `subjects.current_version / current_snapshot_id`；固定 `activation_mode = automatic_initial`、`activation_rule_version = subject_initial_auto_activation_v1.0`。`overview_summary` 不超过 100 字，必须覆盖各自全部一级维度且不得使用能力、水平、分数、排名或诊断表达；协议均禁止把转写或 extracted_points 直接拼接为主体刻画。历史 snapshot 可继续保留 `draft`、approved_at 和 approved_by_user_id，仅用于存量兼容，新流程不再产生人工审批写入。
 
 后续模型变化必须创建新 snapshot，不修改旧版本。
 
 持续采集页面不直接写 model_snapshots，也不原地更新 active Student-M0 / Teacher-T0。页面只调用 `advanceSubjectModel(refresh)`；已部署的 V1.0 达到自动门槛后由云函数内部创建并激活 revision snapshot。revision snapshot 继续复用 model_snapshots，新增/使用字段：snapshot_type = revision、model_type = revision、parent_snapshot_id、model_change_candidate_ids[]、source_evidence_ids[]、source_analysis_ids[]、version / model_version、generation_protocol = subject_model_auto_revision_v1.0、activation_mode = automatic_rule、auto_update_rule_version = subject_model_auto_update_v1.0、auto_update_key、triggered_by_user_id、activated_at、auto_activated_at、auto_activated_by、status = active。自动激活事务把旧 active 置为 superseded，并更新 Subject 当前版本指针；旧 snapshot 内容不覆盖。历史受控 draft 仍可保留 `generation_protocol = subject_model_revision_v1.0`、approved_at 与 approved_by_user_id。
 
-`getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示和 `construction_progress`；提示和进度结果不属于模型事实。实际新语音仍必须经内容路由和 Evidence Analysis；只有满足统一自动门槛时才创建并激活新 revision。
+`getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与当前 snapshot，动态返回后续对话提示和 `construction_progress`；提示和进度结果不属于模型事实。`action = research_overview` 只允许 researcher / admin，返回 Teacher / Student 的安全构建总览：Subject 安全标识、班级/学校 ID、首次采集进度、active 模型版本、构建百分比、缺口变量数与优先补充提示；不返回原始录音/转写、Evidence 原文、Analysis reasoning、绑定码/线下编号哈希。实际新语音仍必须经内容路由和 Evidence Analysis；只有满足统一自动门槛时才创建并激活新 revision。
 
-`construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度、首次模型审批或持续模型自动更新门槛。
+`construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度、首次模型构建或持续模型自动更新门槛；证据不足/缺失只会降低对应变量进度并进入后续提示，不会被伪造成 supportive。
 
 ## 20. variable_evidence_profiles
 状态：已在 `model-dev-d9gkoyaolb464c28d` 创建并设为 ADMINONLY，已由 `advanceSubjectModel` 对真实教师 13 个变量和 TEST Student 17 个变量完成首次全量重建。唯一业务键为 `subject_id + framework + variable_id`；代码遇到重复 Profile 时停止，不随机更新。
@@ -270,7 +270,7 @@ evidence
   ↓
 evidence_analysis
   ↓
-model_snapshots (draft → Human Review → active Student-M0)
+model_snapshots (automatic_initial → active Teacher-T0 / Student-M0)
 ```
 
 未来多模态：

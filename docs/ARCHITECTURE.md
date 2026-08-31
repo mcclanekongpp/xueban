@@ -2,7 +2,7 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。教师持续语音提交超时阻断已修复并完成真实记录恢复验证；教师/学生采集页和模型页的信息架构已经统一。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 验证新 revision 自动激活、旧 snapshot 保留和重复 refresh 幂等。小程序开发候选版 `1.0.8` 已上传。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 验证新 revision 自动激活、旧 snapshot 保留和重复 refresh 幂等。Teacher / Student 首次模型无人工审核的自动构建/激活以及 researcher/admin 只读构建总览已部署；隔离 TEST Teacher / Student 已验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量与重复调用幂等性。小程序开发候选版 `1.0.9` 已上传，尚未提交审核或正式发布。
 
 Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。已部署的自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
@@ -58,17 +58,17 @@ Guardian WeChat（active binding，仅操作者）
   → Student Evidence
   → Student Evidence Analysis V1.0
   → collection_progress 17/17
-  → buildStudentInitialModel（draft）
-  → approveStudentInitialModel（Human Review）
-  → active Student-M0
+  → buildStudentInitialModel（证据综合 + 固定 17 变量校验）
+  → 确定性 initial snapshot
+  → 规则自动激活 active Student-M0
   → getStudentCurrentModel / student-model（绑定用户安全摘要）
 ```
 
-Student Session、Voice、Message、Evidence、Evidence Analysis 与 Model Snapshot 均归属 Student_ID。当前微信用户仅以 `operator_user_id` / `approved_by_user_id` 表达操作责任，不能替代研究主体。所有接收 `subject_id` 的学生云函数均通过 active `guardian_student_bindings` 或受控研究者权限校验。
+Student Session、Voice、Message、Evidence、Evidence Analysis 与 Model Snapshot 均归属 Student_ID。当前微信用户仅以 `operator_user_id` / `triggered_by_user_id` 表达采集或触发责任，不能替代研究主体。所有接收 `subject_id` 的学生云函数均通过 active `guardian_student_bindings` 或受控研究者权限校验。
 
-17 个任务是 Student V1.0 的 MVP 技术组织方式，不是最终实地采集方法学。儿童端只显示自然、简短的任务提示，不显示 S1—S6、变量编号、Evidence、分数或模型结论。每题独立保存，分析失败时保留 Voice、Message 与 Evidence，采集进度只在有效分析完成后推进。
+17 个任务是 Student V1.0 的 MVP 技术组织方式，不是最终实地采集方法学。儿童端只显示自然、简短的任务提示，不显示 S1—S6、变量编号、Evidence、分数或模型结论。每题独立保存，分析失败时保留 Voice、Message 与 Evidence，采集进度只在有效分析完成后推进。Student Home 在 17/17 后会幂等调用 `analyzeStudentEvidence(action = analyze_pending_initial)`，教师端使用对应 Teacher action；两者都会校验 Evidence↔Analysis 身份字段并修复缺失链接，不修改原始表达。
 
-Student-M0 使用 `student_initial_model_v1.2` 对 supportive Evidence Analysis 做 AI 证据综合，固定保留 S1—S6 与 17 个变量。生成结果必须提炼具体情境中的观察/理解、判断、行动/调整、结果与边界，不得把 extracted_points 或转写直接拼接成模型描述；证据不足的变量不会丢失，也不会强行描述。新 draft 还需生成不超过 100 字且覆盖 S1—S6 的 `overview_summary`。模型先写入新的 draft `model_snapshots`，人工审批后同一 snapshot 转 active，历史 snapshot 不覆盖。17/17 后 Student Home 提供首次建模结果入口；`getStudentCurrentModel` 只返回绑定 Student 的安全摘要，`student-model` 区分“待复核”与“已复核”，不暴露原始 Evidence、内部 reasoning、分数、排名或诊断。
+Student-M0 使用 `student_initial_model_v1.2` 对 supportive Evidence Analysis 做 AI 证据综合，固定保留 S1—S6 与 17 个变量。生成结果必须提炼具体情境中的观察/理解、判断、行动/调整、结果与边界，不得把 extracted_points 或转写直接拼接成模型描述；证据不足的变量不会丢失，而是保留为“证据不足”。新 snapshot 还需生成不超过 100 字且覆盖 S1—S6 的 `overview_summary`。首次构建采用确定性 snapshot ID 和 `activating → active` 事务流，记录 `activation_mode = automatic_initial`，同时更新 Subject 当前版本指针；重试复用同一 snapshot，不需要人工审核。`approveStudentInitialModel` 仅作历史兼容，不再写入新审批。17/17 后 Student Home 提供首次建模结果入口；`getStudentCurrentModel` 只返回绑定 Student 的安全摘要，不暴露原始 Evidence、内部 reasoning、分数、排名或诊断。
 
 ### Teacher Continuous 真人提交链
 
@@ -109,7 +109,7 @@ Evidence + latest active Evidence Analysis + current active/draft Snapshot
 
 `getSubjectModelGuidance` 不创建 Evidence Gap 集合或候选记录，也不写数据库。它只使用 supportive Evidence（relevant / partially_relevant 且 usable / weak）的数量、充分性、情境和时间覆盖，结合当前 snapshot 状态进行优先级排序。提示问题只负责开启对话，不把入口类型硬绑定模型变量；实际语音仍可匹配 0—5 个变量或 0 匹配。
 
-Teacher 生成协议升级为 `teacher_initial_model_v1.3`，Student 生成协议升级为 `student_initial_model_v1.2`。两者均要求模型描述承担跨证据综合，而不是复述转写或逐条排列 extracted_points，并生成不超过 100 字、覆盖固定一级维度的 `overview_summary`。已审批 active snapshot 保持不可变；本轮不会自动重建、覆盖或批准现有 Teacher / Student 模型。
+Teacher 生成协议为 `teacher_initial_model_v1.3`，Student 生成协议为 `student_initial_model_v1.2`。两者均要求模型描述承担跨证据综合，而不是复述转写或逐条排列 extracted_points，并生成不超过 100 字、覆盖固定一级维度的 `overview_summary`。首次采集完成后自动构建和激活，证据不足的变量保留为缺口；已有 active snapshot 保持不可变，不在原记录上覆盖。
 
 ## 0.5 模型构建进度与模型页信息层级
 
@@ -122,9 +122,9 @@ Teacher 生成协议升级为 `teacher_initial_model_v1.3`，Student 生成协�
 - supportive Evidence 覆盖至少 2 个中国标准时间自然日：10%；
 - supportive Evidence 覆盖至少 2 个 context 或 source type：5%。
 
-supportive 仍严格限定为 `relevance_status = relevant / partially_relevant` 且 `evidence_sufficiency = usable / weak`。irrelevant、uncertain、insufficient 不增加支持覆盖；进度计算不会调整 relevance、sufficiency、confidence、首次模型审核或持续模型自动更新门槛。一级维度进度是该维度固定变量的算术平均，总体进度是教师 13 个或学生 17 个固定变量的算术平均，因此未采集变量必然以 0 计入，不能通过只重复少数变量获得 100%。
+supportive 仍严格限定为 `relevance_status = relevant / partially_relevant` 且 `evidence_sufficiency = usable / weak`。irrelevant、uncertain、insufficient 不增加支持覆盖；进度计算不会调整 relevance、sufficiency、confidence、首次模型构建或持续模型自动更新门槛。一级维度进度是该维度固定变量的算术平均，总体进度是教师 13 个或学生 17 个固定变量的算术平均，因此未采集变量必然以 0 计入，不能通过只重复少数变量获得 100%。
 
-Teacher / Student 模型页统一按“100 字内总体概览 → 构建进度百分比与一级维度雷达图 → 具体变量信息”展示。新 snapshot 优先使用经模型生成并通过首次审核或持续自动规则校验的 `model_data.overview_summary`；旧 active snapshot 保持不可变，页面暂以全维度构建状态摘要作为兼容概览，不回写历史数据。
+Teacher / Student 模型页统一按“100 字内总体概览 → 构建进度百分比与一级维度雷达图 → 具体变量信息”展示。新 snapshot 优先使用经模型生成并通过固定结构/证据规则校验的 `model_data.overview_summary`；旧 active snapshot 保持不可变，页面暂以全维度构建状态摘要作为兼容概览，不回写历史数据。
 
 ## 0.6 持续证据规则驱动自动更新 V1.0
 
@@ -155,17 +155,18 @@ AI 综合输出还必须通过 100 字概览、候选变量精确匹配和固定
 - `voice_records` 增加 ASR 分段耗时字段，以区分获取临时 URL、腾讯 ASR 请求和整体云函数耗时。
 - 多变量 Analysis 从前端串行 N 次云函数调用改为一次 `analyze_batch`，云函数内部每批最多并发 3 条；每条仍使用独立协议、独立记录和幂等检查。
 - 批量 Analysis 与 Evidence Health 正式回包均使用精简字段；健康层和自动更新在 Analysis 落库后异步执行，不阻塞页面成功反馈。
-- 性能优化不改变 relevance、sufficiency、supportive、模型置信度、首次模型审核或持续模型自动更新门槛。
+- 性能优化不改变 relevance、sufficiency、supportive、模型置信度、首次模型构建或持续模型自动更新门槛。
 
 ## 0.8 真人试采发布边界
 
 - 正式代码包入口仅保留主体模型采集流程；遗留 QuickStart 页面从 `app.json` 移除并由上传忽略配置排除。
 - TEST 辅助脚本和无前端入口的 TEST 云函数可留在开发环境，但真人流程不得生成 `is_test = true` 或 `test_source = simulated_transcript` 的记录。
-- 真人 Student 的 `buildStudentInitialModel` 只创建 draft。`approveStudentInitialModel` 仅 researcher / admin 可对真人主体受控执行，普通 Guardian 无审批权限；teacher 仅可在本人 active binding 下查看或审批 TEST Student。
+- 真人 Teacher / Student 完成首次采集与 Evidence Analysis 后自动构建、激活 initial snapshot，不设人工审核。普通 Guardian 仍不能指定他人 Student_ID、修改模型规则或直接写 snapshot。
+- researcher / admin 登录后进入 `pages/research-overview/research-overview`，通过 `getSubjectModelGuidance(action = research_overview)` 只读查看 Teacher / Student 采集进度、active 模型版本、构建百分比、缺口变量数与优先补充提示。该接口不返回原始录音/转写、Evidence 原文、内部 reasoning 或身份哈希。
 - 普通 Guardian 不直接访问数据库，只能读取本人 active binding 对应的安全 Student-M0 摘要，不能读取原始 Evidence、内部 reasoning、`student_no_hash` 或 `bind_code_hash`。所有学生采集授权继续以当前 user 的 active `guardian_student_bindings` 为边界。
 - 教师首页持续采集只保留 `teaching_reflection` 与 `student_observation` 两个正式入口；`free_dialogue` 只作历史数据和旧链接兼容。重复的泛化语音入口和未开发的记录中心不进入正式页面。Teacher Record Center 作为非阻断 TODO 保留。
 - 教师/学生逐项采集采用一致的页面宽度、进度、任务卡、录音、提交与状态反馈结构；教师/学生模型采用一致的总体概览、构建进度雷达图、版本状态、一级维度、二级变量、四级状态标签、当前描述与可选不确定性结构。学生采集文案继续保持儿童友好，不显示技术术语；构建进度明确标注为覆盖指标而非能力或质量评价。
-- 微信小程序开发候选版 `1.0.8` 已上传，包含已云端验证的规则驱动自动 revision 状态展示。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
+- 微信小程序开发候选版 `1.0.9` 已上传，包含首次模型自动激活、构建进度/提示与 researcher/admin 总览。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
 
 ## 0.7 全量备份与恢复边界
 
