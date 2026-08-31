@@ -23,3 +23,6 @@ docs/REVIEW_TEST.md
 .env
 .env.*
 !.env.example
+
+# Encrypted local research backups and local backup keys
+/local-backups/

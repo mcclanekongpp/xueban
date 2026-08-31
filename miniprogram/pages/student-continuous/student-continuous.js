@@ -249,16 +249,47 @@ Page({
         matched_count: evidence.length
       })
 
-      for (const item of evidence) {
+      if (evidence.length > 0) {
         const analysisRes = await wx.cloud.callFunction({
           name: 'analyzeStudentEvidence',
-          data: { evidence_id: item.evidence_id, save_analysis: true }
+          data: {
+            action: 'analyze_batch',
+            evidence_ids: evidence.map((item) => item.evidence_id)
+          }
         })
         const analysis = analysisRes && analysisRes.result ? analysisRes.result : null
 
-        if (!analysis || analysis.success !== true || analysis.saved !== true) {
+        console.log('学生持续 Evidence 批量分析完成：', analysis)
+
+        if (!analysis || analysis.success !== true || analysis.failed_count !== 0) {
           throw new Error((analysis && analysis.message) || '内容分析尚未完成，请稍后重试')
         }
+
+        // Evidence / Analysis 已经安全落库后刷新证据健康层。该步骤只写
+        // Profile / Gap / Candidate，不修改 active Student-M0。
+        // 证据健康层在分析落库后异步刷新，不阻塞用户看到“已保存”。
+        // 请求已经发出后页面返回不会改变 Voice / Message / Analysis 状态；
+        // 失败时下一次提交或研究端 refresh 仍可幂等补建。
+        wx.cloud.callFunction({
+            name: 'advanceSubjectModel',
+            data: {
+              action: 'refresh',
+              compact_result: true,
+              subject_type: 'student',
+              subject_id: this.data.subjectId
+            }
+          })
+          .then((healthRes) => {
+            const result = healthRes && healthRes.result ? healthRes.result : {}
+            console.log('学生证据健康层刷新：', {
+              success: result.success === true,
+              profile_count: Number(result.profile_count || 0),
+              candidate_count: Number(result.model_change_candidate_count || 0)
+            })
+          })
+          .catch((healthError) => {
+            console.warn('学生证据健康层待重试：', healthError)
+          })
       }
 
       this.setData({

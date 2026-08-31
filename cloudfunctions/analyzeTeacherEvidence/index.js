@@ -1027,6 +1027,90 @@ ASR 转写疑似存在问题；
 }
 
 
+async function analyzeBatch(evidenceIds) {
+  const ids = [...new Set((Array.isArray(evidenceIds) ? evidenceIds : [])
+    .map(item => String(item || '').trim())
+    .filter(Boolean))]
+
+
+  if (ids.length === 0 || ids.length > 5) {
+    return {
+      success: false,
+      code: 'EVIDENCE_BATCH_INVALID',
+      message: '批量分析需要1—5个有效 evidence_id'
+    }
+  }
+
+
+  const startedAt = Date.now()
+  const results = []
+
+
+  // 持续记录最多路由到5个变量。每批最多并发3条，减少串行 AI
+  // 往返等待，但不取消每条 Evidence 的独立协议、独立校验和独立落库。
+  for (let offset = 0; offset < ids.length; offset += 3) {
+    const batch = await Promise.all(ids.slice(offset, offset + 3).map(async evidenceId => {
+      try {
+        const item = await exports.main({
+          evidence_id: evidenceId,
+          save_analysis: true
+        })
+
+
+        // 批量接口只返回前端判断提交状态所需的最小字段。完整
+        // Evidence Analysis 已独立落库，不随批量回包重复传输。
+        return {
+          success: item && item.success === true,
+          saved: item && item.saved === true,
+          already_analyzed: item && item.already_analyzed === true,
+          evidence_id: evidenceId,
+          analysis_id: item && item.analysis_id ? item.analysis_id : '',
+          code: item && item.code ? item.code : '',
+          message: item && item.message ? item.message : ''
+        }
+      } catch (error) {
+        return {
+          success: false,
+          code: 'BATCH_ITEM_ERROR',
+          evidence_id: evidenceId,
+          message: error.message || '证据分析失败'
+        }
+      }
+    }))
+
+
+    results.push(...batch)
+  }
+
+
+  const successCount =
+    results.filter(item =>
+      item &&
+      item.success === true &&
+      item.saved === true
+    ).length
+
+
+  const failedCount =
+    results.length - successCount
+
+
+  return {
+    success: failedCount === 0,
+    partial_success:
+      successCount > 0 &&
+      failedCount > 0,
+    action: 'analyze_batch',
+    evidence_count: ids.length,
+    saved_count: successCount,
+    failed_count: failedCount,
+    processing_ms:
+      Date.now() - startedAt,
+    results
+  }
+}
+
+
 // ==================================================
 // 主函数
 // ==================================================
@@ -1062,6 +1146,25 @@ exports.main =
         event && event.voice_id
           ? String(event.voice_id).trim()
           : ''
+      )
+    }
+
+
+    if (
+      action ===
+      'analyze_batch'
+    ) {
+      if (!openid) {
+        return {
+          success: false,
+          code: 'NO_OPENID',
+          message: '未获取到微信用户标识'
+        }
+      }
+
+
+      return await analyzeBatch(
+        event && event.evidence_ids
       )
     }
 

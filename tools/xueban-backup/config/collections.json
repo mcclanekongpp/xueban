@@ -1,0 +1,37 @@
+{
+  "schema_version": "xueban_backup_registry_v1.0",
+  "restricted": [
+    "users",
+    "identity_map",
+    "schools",
+    "classes",
+    "class_memberships",
+    "teacher_bind_codes",
+    "student_bind_codes",
+    "guardian_student_bindings",
+    "consents"
+  ],
+  "research": [
+    "subjects",
+    "subject_background",
+    "collection_tasks",
+    "collection_progress",
+    "sessions",
+    "messages",
+    "voice_records",
+    "evidence",
+    "evidence_analysis",
+    "model_snapshots"
+  ],
+  "planned": [
+    "variable_evidence_profiles",
+    "collection_events",
+    "supplement_candidates",
+    "model_change_candidates",
+    "media_records",
+    "behavior_records"
+  ],
+  "storage_prefixes": [
+    "voice/"
+  ]
+}

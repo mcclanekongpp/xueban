@@ -11,8 +11,18 @@ const CloudBase = CloudBaseModule.default || CloudBaseModule
 const TARGET_ENV = 'model-dev-d9gkoyaolb464c28d'
 const ALLOWED_FUNCTION_TIMEOUTS = Object.freeze({
   analyzeStudentEvidence: 120,
-  buildStudentInitialModel: 30
+  analyzeTeacherEvidence: 120,
+  advanceSubjectModel: 120,
+  buildStudentInitialModel: 30,
+  transcribeVoice: 60
 })
+
+const ACTIVE_TEACHER_TIMEOUT_ONLY = new Set([
+  'analyzeStudentEvidence',
+  'analyzeTeacherEvidence',
+  'advanceSubjectModel',
+  'transcribeVoice'
+])
 
 async function getCurrentUser(openid) {
   const result = await db
@@ -42,7 +52,10 @@ exports.main = async (event = {}) => {
   }
 
   if (
-    event.confirmation !== 'STUDENT_M0_FUNCTION_TIMEOUTS' ||
+    ![
+      'STUDENT_M0_FUNCTION_TIMEOUTS',
+      'SUBJECT_MODEL_PIPELINE_TIMEOUTS'
+    ].includes(event.confirmation) ||
     !timeout
   ) {
     return {
@@ -54,10 +67,19 @@ exports.main = async (event = {}) => {
 
   try {
     const user = await getCurrentUser(openid)
+    const canApplyCollectionPipelineTimeout =
+      user &&
+      user.status === 'active' &&
+      user.role === 'teacher' &&
+      ACTIVE_TEACHER_TIMEOUT_ONLY.has(functionName)
+
     if (
       !user ||
       user.status !== 'active' ||
-      !['researcher', 'admin'].includes(user.role)
+      (
+        !['researcher', 'admin'].includes(user.role) &&
+        !canApplyCollectionPipelineTimeout
+      )
     ) {
       return {
         success: false,

@@ -190,6 +190,68 @@ ${rawText}
 `.trim()
 }
 
+async function analyzeBatch(evidenceIds) {
+  const ids = [...new Set((Array.isArray(evidenceIds) ? evidenceIds : [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean))]
+
+  if (ids.length === 0 || ids.length > 5) {
+    return {
+      success: false,
+      code: 'EVIDENCE_BATCH_INVALID',
+      message: '批量分析需要1—5个有效 evidence_id'
+    }
+  }
+
+  const startedAt = Date.now()
+  const results = []
+
+  // 最多三个并发 AI 请求，避免持续记录命中多个变量时把等待时间
+  // 简单叠加，同时避免一次性放大 CloudBase AI 并发压力。
+  for (let offset = 0; offset < ids.length; offset += 3) {
+    const batch = await Promise.all(ids.slice(offset, offset + 3).map(async (evidenceId) => {
+      try {
+        const item = await exports.main({
+          evidence_id: evidenceId,
+          save_analysis: true
+        })
+        // 完整 Analysis 已按 Evidence 独立保存。批量响应只保留页面
+        // 判断成功、失败和重试所需字段，减少持续采集回包体积。
+        return {
+          success: item && item.success === true,
+          saved: item && item.saved === true,
+          already_analyzed: item && item.already_analyzed === true,
+          evidence_id: evidenceId,
+          analysis_id: item && item.analysis_id ? item.analysis_id : '',
+          code: item && item.code ? item.code : '',
+          message: item && item.message ? item.message : ''
+        }
+      } catch (error) {
+        return {
+          success: false,
+          code: 'BATCH_ITEM_ERROR',
+          evidence_id: evidenceId,
+          message: error.message || '证据分析失败'
+        }
+      }
+    }))
+    results.push(...batch)
+  }
+
+  const successCount = results.filter((item) => item && item.success === true && item.saved === true).length
+  const failedCount = results.length - successCount
+  return {
+    success: failedCount === 0,
+    partial_success: successCount > 0 && failedCount > 0,
+    action: 'analyze_batch',
+    evidence_count: ids.length,
+    saved_count: successCount,
+    failed_count: failedCount,
+    processing_ms: Date.now() - startedAt,
+    results
+  }
+}
+
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
   const action = String(event.action || '').trim()
@@ -205,6 +267,13 @@ exports.main = async (event = {}) => {
         message: error.message || '学生持续语音整理失败'
       }
     }
+  }
+
+  if (action === 'analyze_batch') {
+    if (!openid) {
+      return { success: false, code: 'NO_OPENID', message: '未获取到微信用户标识' }
+    }
+    return analyzeBatch(event.evidence_ids)
   }
 
   const evidenceId = String(event.evidence_id || '').trim()

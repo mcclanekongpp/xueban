@@ -1,0 +1,10 @@
+{
+  "name": "advanceSubjectModel",
+  "version": "1.0.0",
+  "description": "Teacher / Student evidence health and controlled model revision pipeline",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.18.3",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

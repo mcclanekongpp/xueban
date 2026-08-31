@@ -1717,7 +1717,8 @@ Page({
         //
         // 分别独立分析。
         //
-        // 串行执行，避免同时请求多个 AI。
+        // 云函数内按最多3条并发批量处理，仍保持每条 Evidence
+        // 独立分析与独立落库，避免多变量命中时串行累加等待。
         // ==================================================
 
         wx.showLoading({
@@ -1730,171 +1731,103 @@ Page({
         })
 
 
-        const analysisResults = []
+        const evidenceIds =
+          evidenceList
+            .map(item =>
+              item && item.evidence_id
+                ? item.evidence_id
+                : ''
+            )
+            .filter(Boolean)
 
 
-        let successCount = 0
+        const batchRes =
+          await wx.cloud
+            .callFunction({
 
-        let failedCount = 0
+              name:
+                'analyzeTeacherEvidence',
 
+              data: {
 
-        for (
-          const evidence of evidenceList
-        ) {
+                action:
+                  'analyze_batch',
 
-          const evidenceId =
-            evidence &&
-            evidence.evidence_id
-              ? evidence.evidence_id
-              : ''
-
-
-          if (!evidenceId) {
-
-            failedCount++
-
-
-            analysisResults.push({
-
-              success:
-                false,
-
-              evidence_id:
-                '',
-
-              message:
-                '缺少 evidence_id'
+                evidence_ids:
+                  evidenceIds
+              }
             })
 
 
-            continue
-          }
+        const batchResult =
+          batchRes && batchRes.result
+            ? batchRes.result
+            : null
 
 
-          try {
+        const analysisResults =
+          batchResult &&
+          Array.isArray(batchResult.results)
+            ? batchResult.results
+            : []
 
-            const analysisRes =
-              await wx.cloud
-                .callFunction({
 
+        const successCount =
+          batchResult
+            ? Number(batchResult.saved_count || 0)
+            : 0
+
+
+        const failedCount =
+          batchResult
+            ? Number(batchResult.failed_count || 0)
+            : evidenceIds.length
+
+
+        // Analysis 成功后幂等刷新 Evidence Profile / Gap /
+        // Contradiction / Stagnation / Model Change Candidate。
+        // 该动作不会修改 active model，也不会自动批准 draft。
+        if (successCount > 0) {
+          // Profile / Gap / Candidate 是分析完成后的异步派生层，
+          // 不阻塞用户看到提交成功；失败后可由下一次 refresh 幂等补建。
+          wx.cloud
+            .callFunction({
                   name:
-                    'analyzeTeacherEvidence',
-
+                    'advanceSubjectModel',
                   data: {
-
-                    evidence_id:
-                      evidenceId,
-
-                    save_analysis:
-                      true
+                    action:
+                      'refresh',
+                    compact_result:
+                      true,
+                    subject_type:
+                      'teacher'
                   }
                 })
+            .then((healthRes) => {
+              const result =
+                healthRes && healthRes.result
+                  ? healthRes.result
+                  : {}
 
 
-            const result =
-              analysisRes.result
-
-
-            console.log(
-              `持续证据正式分析 ${evidenceId}：`,
-              result
-            )
-
-
-            if (
-              result &&
-              result.success
-            ) {
-
-              successCount++
-
-
-              analysisResults.push({
-
-                success:
-                  true,
-
-                evidence_id:
-                  evidenceId,
-
-                analysis_id:
-                  result.analysis_id ||
-                  (
-                    result.analysis &&
-                    result.analysis
-                      .analysis_id
-                  ) ||
-                  '',
-
-                relevance_status:
-                  result.analysis
-                    ? result.analysis
-                        .relevance_status
-                    : '',
-
-                evidence_sufficiency:
-                  result.analysis
-                    ? result.analysis
-                        .evidence_sufficiency
-                    : '',
-
-                already_analyzed:
-                  result
-                    .already_analyzed ===
-                  true
-              })
-
-
-            } else {
-
-              failedCount++
-
-
-              analysisResults.push({
-
-                success:
-                  false,
-
-                evidence_id:
-                  evidenceId,
-
-                message:
-                  (
-                    result &&
-                    result.message
-                  ) ||
-                  '证据分析失败'
-              })
-            }
-
-
-          } catch (
-            analysisError
-          ) {
-
-            failedCount++
-
-
-            console.error(
-              `持续证据分析失败 ${evidenceId}：`,
-              analysisError
-            )
-
-
-            analysisResults.push({
-
-              success:
-                false,
-
-              evidence_id:
-                evidenceId,
-
-              message:
-                analysisError
-                  .message ||
-                '证据分析失败'
+              console.log(
+                '教师证据健康层刷新：',
+                {
+                  success:
+                    result.success === true,
+                  profile_count:
+                    Number(result.profile_count || 0),
+                  candidate_count:
+                    Number(result.model_change_candidate_count || 0)
+                }
+              )
             })
-          }
+            .catch((healthError) => {
+              console.warn(
+                '教师证据健康层待重试：',
+                healthError
+              )
+            })
         }
 
 

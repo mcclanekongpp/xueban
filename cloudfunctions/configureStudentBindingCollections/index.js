@@ -15,7 +15,15 @@ const ALLOWED_COLLECTIONS = new Set([
   'class_memberships',
   'teacher_bind_codes',
   'student_bind_codes',
-  'guardian_student_bindings'
+  'guardian_student_bindings',
+  'variable_evidence_profiles',
+  'model_change_candidates'
+])
+
+const ACTIVE_TEACHER_HARDEN_ONLY = new Set([
+  'teacher_bind_codes',
+  'variable_evidence_profiles',
+  'model_change_candidates'
 ])
 
 async function getCurrentUser(openid) {
@@ -47,7 +55,8 @@ exports.main = async (event = {}) => {
   if (
     ![
       'STUDENT_BINDING_MVP_ADMINONLY',
-      'SUBJECT_BINDING_MVP_ADMINONLY'
+      'SUBJECT_BINDING_MVP_ADMINONLY',
+      'SUBJECT_MODEL_PIPELINE_ADMINONLY'
     ].includes(event.confirmation) ||
     !ALLOWED_COLLECTIONS.has(collectionName)
   ) {
@@ -63,17 +72,17 @@ exports.main = async (event = {}) => {
 
     // 该例外只允许已绑定教师把新增教师绑定码集合收紧为 ADMINONLY，
     // 不能修改其他集合，也不能把权限放宽。
-    const canHardenTeacherBindingCollection =
+    const canHardenWhitelistedCollection =
       user &&
       user.status === 'active' &&
       user.role === 'teacher' &&
-      collectionName === 'teacher_bind_codes'
+      ACTIVE_TEACHER_HARDEN_ONLY.has(collectionName)
 
     if (
       !user ||
       user.status !== 'active' ||
       (!['researcher', 'admin'].includes(user.role) &&
-        !canHardenTeacherBindingCollection)
+        !canHardenWhitelistedCollection)
     ) {
       return {
         success: false,

@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-最近一次已上传开发版为 `1.0.6`。Teacher / Student 统一绑定协议已经进入开发环境，`teacher_bind_codes` 已创建并设置为 ADMINONLY；现有 `student_bind_codes`、`guardian_student_bindings` 和历史 `identity_map` 继续兼容。Teacher / Student Continuous Collection 仍复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
+最近一次已上传开发版为 `1.0.7`。Teacher / Student 统一绑定协议、持续证据健康与受控模型 revision 主链已经进入开发环境；`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -88,6 +88,8 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 
 学生首次与持续语音核心字段包括 voice_id、subject_id、subject_type = student、framework = student_v1.0、session_id、message_id、file_id、duration_ms、transcript、operator_user_id、asr_status、is_test、created_at、updated_at。学生持续记录完成路由后另含 continuous_submit_status、continuous_record_id、continuous_submit_evidence_ids[]、continuous_no_match_reason、continuous_submitted_at。真实手机录音保存云文件并经腾讯 ASR；模拟技术记录另含 `status`，且必须标记 `is_test = true`、`test_source = simulated_transcript`。
 
+新转写成功记录另含 `asr_source_type = cloud_storage_url`、`asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms`。腾讯 ASR 直接读取短时有效的云存储签名 URL；URL 本身不保存到数据库、不写日志、不返回前端。历史成功记录缺少这些性能字段时继续兼容。
+
 后续建议逐步补：collection_event_id。
 
 ## 17. evidence
@@ -127,24 +129,24 @@ Evidence Analysis 不直接生成主体模型结论。
 
 后续模型变化必须创建新 snapshot，不修改旧版本。
 
-Student Continuous Collection V1.0 不写 model_snapshots，不更新 active Student-M0，也不改变 subjects.current_version / current_snapshot_id。
+持续采集页面不直接写 model_snapshots，也不更新 active Student-M0 / Teacher-T0。达到 Candidate 门槛后，受控研究调用才可创建 revision draft。revision snapshot 继续复用 model_snapshots，新增/使用字段：snapshot_type = revision、model_type = continuous_revision、parent_snapshot_id、source_candidate_ids[]、source_evidence_ids[]、source_analysis_ids[]、version / model_version、generation_protocol = subject_model_revision_v1.0、status = draft、approved_at、approved_by_user_id。人工批准后旧 active 置为 superseded，新 draft 置为 active，并更新 Subject 当前版本指针；旧 snapshot 内容不覆盖。
 
 `getSubjectModelGuidance` 不写 model_snapshots，也不创建 supplement_candidates。它只读当前 Evidence、最新 active Evidence Analysis 与 active/draft snapshot，动态返回后续对话提示和 `construction_progress`；提示和进度结果不属于模型事实，实际新语音仍需内容路由、Evidence Analysis 和后续人工复核。
 
 `construction_progress` 为运行时计算结构，不存数据库。核心字段：index_name、index_version、is_quality_score = false、overall_percent、variable_count、collected_variable_count、analyzed_variable_count、supportive_variable_count、dimensions[]、variables[]、summary_text、formula、note。每变量最多 100%：active Evidence 20%、有效 Analysis 20%、至少 1 条 supportive Evidence 30%、至少 2 条 supportive Evidence 15%、至少 2 个中国标准时间自然日 10%、至少 2 个 context 或 source type 5%。一级维度与总体均按固定变量算术平均；未采集变量以 0 计入。该结构不改变 Evidence Analysis、模型状态、置信度或人工审批门槛。
 
 ## 20. variable_evidence_profiles
-状态：设计和云函数代码已保留；截至 2026-08-27，当前 `model-dev-d9gkoyaolb464c28d` 数据面未实际存在该集合。机制当前暂停，不阻断教师 / 学生首次模型 MVP 时不继续处理。
+状态：已在 `model-dev-d9gkoyaolb464c28d` 创建并设为 ADMINONLY，已由 `advanceSubjectModel` 对真实教师 13 个变量和 TEST Student 17 个变量完成首次全量重建。唯一业务键为 `subject_id + framework + variable_id`；代码遇到重复 Profile 时停止，不随机更新。
 
 用途：保存某个主体某个变量的当前证据健康画像。
 
-V1.0 字段：profile_id、subject_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、evidence_count、analyzed_count、relevant_count、partially_relevant_count、irrelevant_count、uncertain_count、usable_count、weak_count、insufficient_count、supportive_evidence_count、supportive_usable_count、supportive_weak_count、source_types[]、source_type_count、source_modalities[]、modality_count、effective_modality_count、first_evidence_at、latest_evidence_at、evidence_dates[]、time_point_count、contexts[]、context_count、support_status、support_status_name、support_summary、evidence_gaps[]、gap_status、contradiction_status、stagnation_status、profile_version、created_at、updated_at。
+当前 V1.1 字段：profile_id、subject_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、evidence_count、analyzed_count、relevant_count、partially_relevant_count、irrelevant_count、uncertain_count、usable_count、weak_count、insufficient_count、supportive_evidence_count、supportive_usable_count、supportive_weak_count、source_types[]、source_type_count、source_modalities[]、modality_count、effective_modality_count、first_evidence_at、latest_evidence_at、evidence_dates[]、time_point_count、contexts[]、context_count、support_status、support_status_name、support_summary、evidence_gaps[]、gap_status、contradiction_status、contradiction_resolution、stagnation_status、stagnation_reasons[]、profile_version = 1.1、created_at、updated_at。
 
 support_status：insufficient / initial / supported / relatively_stable。
 
 supportive evidence 固定指：relevance_status = relevant / partially_relevant，且 evidence_sufficiency = usable / weak。source_types、source_modalities、evidence_dates、contexts 及其覆盖计数只由 supportive evidence 贡献。unknown 可以保留在 source_modalities 中，但不计入 effective_modality_count，也不能帮助达到 relatively_stable。context 保留正式分析原文并精确去重；context_count 只是 V1.0 辅助覆盖指标，不代表标准化情境类别数量。
 
-Profile 只描述“现在有什么证据”，Evidence Gap 才负责“还缺什么”。
+Profile 的统计层描述“现在有什么证据”，内嵌 `evidence_gaps` 记录当前还缺什么。Gap V1.0 类型：no_evidence、insufficient_detail、single_time_point、single_context、single_source、stale_evidence、contradiction_pending。当前不单独创建 evidence_gaps 集合。
 
 ## 21. collection_events（计划）
 状态：尚未创建。
@@ -162,14 +164,16 @@ Profile 只描述“现在有什么证据”，Evidence Gap 才负责“还缺�
 
 status：pending / shown / completed / skipped。
 
-## 23. model_change_candidates（计划）
-状态：尚未创建。
+## 23. model_change_candidates
+状态：已在 `model-dev-d9gkoyaolb464c28d` 创建并设为 ADMINONLY，由 `advanceSubjectModel` 幂等维护。
 
 用途：保存新证据可能引起的模型变化候选。
 
-建议字段：candidate_id、subject_id、subject_type、framework、dimension_id、variable_id、current_snapshot_id、change_type、old_state、candidate_state、supporting_evidence_ids[]、contradicting_evidence_ids[]、context_changes[]、reasoning_basis、review_status、created_at、updated_at。
+当前字段：candidate_key、candidate_id、subject_id、subject_type、framework、dimension_id、dimension_name、variable_id、variable_name、current_snapshot_id、change_type、old_state、candidate_state、supporting_evidence_ids[]、supporting_analysis_ids[]、new_supportive_usable_count、eligible_for_draft、contradiction_status、contradiction_resolution、context_changes[]、reasoning_basis、profile_id、review_status、draft_snapshot_id、applied_snapshot_id、created_at、updated_at。
 
 change_type：content_update / support_strengthening / context_refinement / contradiction_pending / no_change。
+
+`candidate_key` 由 subject + framework + variable + current active snapshot 构成。同一变量必须至少有 2 条 active snapshot 之后新增的 continuous supportive usable Evidence，且 contradiction_status != pending，才可 `eligible_for_draft = true`。review_status 支持 pending_review、blocked_by_contradiction、draft_created、applied、resolved_no_change。单条 Evidence、weak、irrelevant、uncertain、insufficient 都不能直接生成 draft 或改 active snapshot。
 
 ## 24. media_records（后续）
 状态：尚未创建。
@@ -242,7 +246,7 @@ evidence_analysis
   ↓
 variable_evidence_profiles
   ↓
-model_change_candidates（计划）
+model_change_candidates
   ↓
 model_snapshots
 ```

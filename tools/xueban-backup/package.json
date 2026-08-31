@@ -1,0 +1,15 @@
+{
+  "name": "xueban-backup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Read-only full backup and offline verification tool for Xueban CloudBase data",
+  "scripts": {
+    "check": "node --check src/cli.js && node --check src/backup.js && node --check src/integrity.js && node --check src/utils.js && node --check src/wechatide.js",
+    "inventory": "node src/cli.js inventory",
+    "backup": "node src/cli.js backup",
+    "verify": "node src/cli.js verify"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -5,9 +5,67 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-真人试采候选版 `1.0.6` 已上传为微信小程序开发版本，包含主体刻画综合、后续补充对话提醒、模型构建进度展示和 Teacher / Student 统一绑定入口；尚未提交审核或正式发布。
+真人试采候选版 `1.0.7` 已上传为微信小程序开发版本，包含持续证据健康、受控模型 revision 主链和语音/分析性能优化；尚未提交审核或正式发布。
 
-当前最高优先级：**完成微信公众平台隐私保护指引核对、审核与发布，并用全新微信账号做一次 Teacher 正确凭据绑定烟雾测试**。
+当前最高优先级：**完成微信公众平台隐私保护指引核对，提交 `1.0.7` 审核并发布**。
+
+## 真人试采候选版本 1.0.7（2026-08-31）
+
+- [x] AppID = `wx962acbf120074da9`，云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] `advanceSubjectModel`、`analyzeTeacherEvidence`、`analyzeStudentEvidence`、`transcribeVoice` 已部署并为 Active；timeout 分别为 120 / 120 / 120 / 60 秒
+- [x] `variable_evidence_profiles` 与 `model_change_candidates` 已创建并保持 ADMINONLY
+- [x] 72 个 JavaScript 通过 `node --check`，208 个 JSON 解析检查通过，Evidence Health 规则测试 PASS
+- [x] 教师 13/13、Teacher Current Model `MS_MT873ZQI_9PEUL`、教学反思页面通过；Student 17/17、Student-M0 `MS_MTBMDOF7_0MNQU`、student-model 与 student-continuous 页面通过
+- [x] 修改页面 WXML / WXSS 单独编译通过；开发者工具刷新编译通过，Console / Network 无 error、warning、失败或超时
+- [x] `1.0.7` 已于 2026-08-31 09:49:18 CST 上传为开发版本，代码包 815790 bytes
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
+
+版本说明：完善持续证据模型版本机制并优化语音识别分析速度。
+
+## 持续证据健康与模型版本主链 V1.0（2026-08-31）
+
+- [x] 新增共用云函数 `advanceSubjectModel`，固定支持 teacher_v1.0 13 变量和 student_v1.0 17 变量，不复制两套健康层逻辑
+- [x] `refresh` 每次重新读取主体全部 active Evidence 与最新一致 active Analysis，完整重建 Profile，不做增量加一
+- [x] `variable_evidence_profiles` 与 `model_change_candidates` 已创建并设置 ADMINONLY
+- [x] Profile 严格使用 supportive 定义（relevant / partially_relevant + usable / weak）；覆盖度只由 supportive Evidence 贡献，unknown modality 不计有效多模态
+- [x] Evidence Gap 已以内嵌 Profile 状态进入主链：no_evidence、insufficient_detail、single_time_point、single_context、single_source、stale_evidence、contradiction_pending
+- [x] Contradiction 与 Stagnation 状态已进入主链；矛盾 pending 会阻断 draft，停滞 reason 不作为主体评价
+- [x] active snapshot 之后的新 continuous supportive usable Evidence 自动形成 Model Change Candidate；单条证据、weak、irrelevant、uncertain、insufficient 不能触发 draft
+- [x] 同一变量至少 2 条新的 supportive usable continuous Evidence 且无 pending contradiction 才允许 `eligible_for_draft = true`
+- [x] `build_draft`、`resolve_contradiction`、`approve_draft` 均为受控研究操作；普通 Teacher / Guardian 页面不能生成或批准模型
+- [x] 新版本只创建 revision draft；Human Review 后才 active，旧 snapshot 转 superseded 且历史内容不覆盖
+- [x] 真实教师完整重建 13 个 Profile、27 个 open Gap、4 个 Candidate（1 个 draft eligible）；TEST Student 重建 17 个 Profile、41 个 open Gap、1 个 Candidate（未达 draft 门槛）
+- [x] 数据面核验为 30 个唯一 Profile、5 个唯一 Candidate；active Teacher snapshot `MS_MT873ZQI_9PEUL` 与 active Student snapshot `MS_MTBMDOF7_0MNQU` 未改变，均无 revision draft
+- [x] 正式教师受控 build_draft 被 `CONTROLLED_MODEL_OPERATION_FORBIDDEN` 拦截；TEST Student dry-run 返回 `NO_DRAFT_ELIGIBLE_CANDIDATES`
+- [x] 本地规则测试覆盖 supportive-only、unknown modality、单条证据、两条 usable、矛盾阻断，结果 PASS
+
+## 语音与分析性能 V1.1（2026-08-31）
+
+- [x] `transcribeVoice` 改为使用云存储临时签名 URL 调用腾讯一句话识别，取消云函数下载 MP3、Base64 编码和再次上传音频内容
+- [x] 新增 `asr_source_type`、`asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms`，临时 URL 不入库、不输出日志、不返回前端
+- [x] Teacher / Student 多变量 Analysis 增加 `analyze_batch`，单次云调用内每批最多并发 3 条，每条仍独立分析和落库
+- [x] 批量响应去除完整 Analysis 正文，只返回 evidence_id、analysis_id、saved 与错误信息
+- [x] Evidence Health refresh 改为分析成功后异步触发，正式页面使用 compact response，不阻塞提交成功反馈
+- [x] 云端缓存 Analysis 批量回归：Teacher 2/2、Student 2/2 成功；压缩后 Teacher 2 条批处理内部耗时 289ms
+- [x] 已转写 TEST Voice 幂等复用通过；新的 URL ASR 路径已完成静态、部署与接口结构核验，后续真人新录音会记录分段耗时
+- [x] `advanceSubjectModel`、Teacher / Student Analysis 云函数运行时为 120 秒，`transcribeVoice` 为 60 秒
+
+## 全量备份工具 V1.0（2026-08-29）
+
+- [x] 新增 `tools/xueban-backup` 本地管理员工具，不进入小程序代码包，不部署备份云函数
+- [x] 复用已登录微信开发者工具只读云接口，无需把腾讯云 SecretKey 写入项目
+- [x] 自动枚举并导出全部 19 个实际集合，共 631 条文档，保留 CloudBase `$date` 与嵌套对象结构
+- [x] 独立枚举并下载 `voice/` 全部 65 个 MP3，共 5,722,748 bytes，每个文件校验大小和 SHA-256
+- [x] 完整备份 2 个 active Model Snapshot：Teacher 1 个、Student 1 个；保留完整 model_data、来源 Evidence / Analysis、生成协议和审核信息
+- [x] 建立 Voice → Message → Evidence → Analysis → Snapshot 跨层引用校验和 Subject 模型索引
+- [x] 识别 63 个被 `voice_records` 引用的音频、2 个孤立云存储音频；孤立文件已保留并报告，未删除
+- [x] 16 条无 file_id 的模拟技术 Voice 作为 info 保留；没有误判为丢失真人音频
+- [x] 备份期间前后集合/存储清单一致，fatal = 0，restorable = true
+- [x] 生成 GPG AES-256 加密包，102 个归档文件离线解密与 SHA-256 复验全部通过
+- [x] 加密包保存在 Git 忽略的 `local-backups/`，备份包和密钥权限均为 0600
+- [ ] 当前备份密钥仍与加密包位于同一台 Mac；必须再复制一份密钥到独立离线介质，不能只依赖项目目录
+- [ ] 正式恢复演练只能在新的空白验证环境中进行，需另行授权
 
 ## Teacher / Student 统一绑定协议（2026-08-28）
 
@@ -254,39 +312,36 @@ TEST active snapshot：`MS_MTBMDOF7_0MNQU`，version = 1.0。该快照只用于�
 - T3-2 analysis_id：`EA_MT8BGC75_DLFB5`
 
 ## 四、教师持续记录自动分析
-- [x] `voice-chat.js` 通过 `analyzeTeacherEvidence(action = route_continuous)` 完成 0—5 变量路由，再逐条调用 `analyzeTeacherEvidence(save_analysis = true)`
+- [x] `voice-chat.js` 通过 `analyzeTeacherEvidence(action = route_continuous)` 完成 0—5 变量路由，再由 `action = analyze_batch` 并发完成每条 Evidence 的独立 Analysis
 - [x] 真人提交超时记录恢复验证完成：`V_MTCGGCBW_M4KSM` 生成 T3-1 / T3-3 / T1-1 三条 Evidence 与三条 active Analysis
 - [x] `V_MTCGI17N_0KYVI` 正确返回 0 匹配；Voice、Message 与 no-match reason 保留，未伪造 Evidence
 - [x] 重试使用确定性 continuous/evidence ID，不重复创建同一 voice + variable Evidence
 - [x] 当前 active Teacher snapshot `MS_MT873ZQI_9PEUL` 未被持续 Evidence 自动更新
+- [x] Analysis 成功后异步刷新 Profile / Gap / Candidate；健康层失败不回滚已保存的 Voice / Message / Evidence / Analysis
 
 Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回滚丢失。
 
-## 五、模型完善机制：暂停深入开发
+## 五、模型完善机制：正式接入持续采集派生链
 
-### 已保留
-- [x] `rebuildVariableEvidenceProfile V1.0` 设计与本地源码已保留
-- [x] 2026-08-27 已重新部署到 `model-dev-d9gkoyaolb464c28d`
-- [x] dry-run 已验证会因当前环境缺少 `variable_evidence_profiles` 而安全失败，未写业务数据
+### 已完成
+- [x] `rebuildVariableEvidenceProfile V1.0` 继续保留为单变量诊断工具
+- [x] 新增共用 `advanceSubjectModel`，一次重建当前主体全部 13 / 17 个 Profile
+- [x] 第一次真实 Teacher / TEST Student Profile 重建与数据库唯一性校验通过
+- [x] Evidence Gap、Contradiction、Stagnation 作为 Profile 状态进入正式主链
+- [x] Model Change Candidate 自动形成，revision draft 与人工批准接口完成
+- [x] 普通采集端只可 refresh，不能 build / resolve / approve
 
-### 暂停项
-- [ ] 当前环境尚未实际创建 `variable_evidence_profiles` 集合
-- [ ] 第一次真实 Profile 重建测试
-- [ ] T2-2 Profile 校验
-- [ ] T3-2 Profile 校验
-- [ ] `rebuildSubjectEvidenceProfiles`
-- [ ] Evidence Gap
-- [ ] supplement_candidates
-- [ ] unmatched monitoring
-- [ ] stagnation diagnosis
-- [ ] model_change_candidates
-- [ ] 模型版本自动/半自动演化
+### 继续暂停
+- [ ] supplement_candidates / Targeted Supplement 状态机
+- [ ] unmatched 自动聚类与 framework gap candidate
+- [ ] 自动批准、无人工复核的模型更新
+- [ ] Student-M2 / Teacher-T2 的长期节奏与回退策略
 
-这些机制不再是当前第一优先级。除非阻断教师或学生首次模型构建，否则不继续处理。
+当前实现已经解决“持续 Evidence 永远停留在证据层”的问题，但仍坚持新 Evidence 不直接修改 active 模型。
 
 ## 六、当前第一优先级
 
-完成微信公众平台隐私保护指引核对、提交 `1.0.6` 审核并发布，随后组织真人教师和学生主体模型采集测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id；完整 Evidence Profile / Evidence Gap 状态机仍不作为当前优先项。
+完成 `1.0.7` 开发版本上传与微信公众平台隐私保护指引核对，提交审核并发布，随后组织真人教师和学生主体模型持续采集与 revision draft 质量测试。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
 
 ## 七、学生端状态
 
@@ -320,15 +375,15 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 计划：完成微信平台隐私核对、审核与发布后进入真人教师和学生主体模型采集测试；以真实语音为主，根据实地问题迭代任务文案和交互，不等待 Evidence Profile 或复杂多模态。
 
 ## 八、当前数据库重要集合
-已有：users、identity_map、subjects、schools、classes、class_memberships、student_bind_codes、guardian_student_bindings、consents、sessions、messages、voice_records、evidence、evidence_analysis、model_snapshots、collection_tasks、collection_progress、subject_background。
+已有：users、identity_map、subjects、schools、classes、class_memberships、teacher_bind_codes、student_bind_codes、guardian_student_bindings、consents、sessions、messages、voice_records、evidence、evidence_analysis、variable_evidence_profiles、model_change_candidates、model_snapshots、collection_tasks、collection_progress、subject_background。
 
-暂停 / 计划：variable_evidence_profiles、collection_events、supplement_candidates、model_change_candidates、media_records（后续）、behavior_records（学生侧后续）。
+暂停 / 计划：collection_events、supplement_candidates、media_records（后续）、behavior_records（学生侧后续）；Evidence Gap 当前内嵌 Profile，不单独建集合。
 
 ## 九、非阻断 TODO
 
 - `subjects.current_version` 当前为空，但 active snapshot 可被 `getTeacherCurrentModel` 正常读取；首次模型 MVP 不受阻断，后续统一版本指针规则。
 - 当前 active snapshot 保存的 T0 教龄为 8 年，而当前 active `subject_background` 为 9 年；snapshot 按版本不可变，后续在新的首次采集前明确 T0 修改与模型重建规则。
-- `submitTeacherContinuousRecord` 的独立云端运行时仍是 3 秒且无正式前端入口；`1.0.6` 继续由 `analyzeTeacherEvidence(action = route_continuous)` 承担正式教师持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断真人流程。
+- `submitTeacherContinuousRecord` 的独立云端运行时仍是 3 秒且无正式前端入口；`1.0.7` 由 `analyzeTeacherEvidence` 的 route_continuous + analyze_batch 承担正式教师持续路由与分析，不阻断真人流程。
 - Teacher Record Center / “我的记录”尚未形成正式业务闭环，已从正式首页移除；后续统一设计，不阻断当前真人试采。
 - `security_follow_up`：正式前端或自动调用链接入前，统一设计 subject authorization。
 - `identity_map` 当前实际只用于 users ↔ Teacher Subject，不适合直接承载 Student_ID ↔ 学号；正式学生身份主表扩展后续统一设计。本轮在线双重校验依赖 `student_bind_codes.student_no_hash` 与线下研究主表。
@@ -337,7 +392,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 - 本轮保留少量 `inactive + is_test=true` 权限探针记录，用于证明 ADMINONLY 生效；不参与 active School 查询。
 - Student Evidence Analysis 的个别 TEST 返回使用了字符串 `none` 表示无不确定性；后续生成新快照前统一将这类语义空值标准化为空，不修改已审批的测试快照。
 - `createStudentTestVoiceRecord` 是无正式前端入口、且只允许 active TEST Student 的开发辅助函数；正式页面不得调用。配置辅助函数已限制为 researcher / admin，仍应保持无普通前端入口。
-- `submitStudentContinuousRecord` 的独立云端运行时当前仍是 3 秒且无正式前端入口；`1.0.6` 继续由 `analyzeStudentEvidence(action = route_continuous)` 承担正式持续路由。后续只有 researcher / admin 可调整运行配置时再清理该遗留端点，不阻断当前真人流程。
+- `submitStudentContinuousRecord` 的独立云端运行时当前仍是 3 秒且无正式前端入口；`1.0.7` 由 `analyzeStudentEvidence` 的 route_continuous + analyze_batch 承担正式持续路由与分析，不阻断当前真人流程。
 - 当前 17 个任务是一变量一短任务的 MVP 技术组织方式；真实儿童试采后再决定是否重组为自然交流、任务活动、行为观察或微采集。
 
 ## 十、明确不做的事情

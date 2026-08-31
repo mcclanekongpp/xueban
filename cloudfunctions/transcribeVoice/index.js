@@ -13,6 +13,7 @@ const AsrClient = tencentcloud.asr.v20190614.Client
 
 // 云函数入口函数
 exports.main = async (event, context) => {
+  const startedAt = Date.now()
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
 
@@ -145,29 +146,26 @@ exports.main = async (event, context) => {
         }
       })
 
-    // 10. 从 CloudBase 云存储读取 MP3 文件
-    const downloadResult = await cloud.downloadFile({
-      fileID: voiceRecord.file_id
+    // 10. 获取短时签名下载 URL。
+    // 腾讯云一句话识别官方推荐 COS URL 方式，服务端可直接下载，
+    // 避免云函数先下载完整 MP3、再 Base64 编码并二次上传造成的
+    // 内存复制与网络等待。URL 只在云函数内部传给 ASR，不返回前端。
+    const urlStartedAt = Date.now()
+    const tempUrlResult = await cloud.getTempFileURL({
+      fileList: [voiceRecord.file_id]
     })
+    const tempFile = tempUrlResult && Array.isArray(tempUrlResult.fileList)
+      ? tempUrlResult.fileList[0]
+      : null
+    const tempFileURL = tempFile && tempFile.tempFileURL
+      ? String(tempFile.tempFileURL).trim()
+      : ''
 
-    const audioBuffer = downloadResult.fileContent
-
-    if (!audioBuffer || !audioBuffer.length) {
-      throw new Error('录音文件内容为空')
+    if (!tempFileURL || (tempFile.code && tempFile.code !== 'SUCCESS')) {
+      throw new Error('无法取得录音文件的短时识别地址')
     }
 
-    // 一句话识别目前单文件不能超过 3MB
-    if (audioBuffer.length > 3 * 1024 * 1024) {
-      throw new Error('录音文件超过语音识别大小限制')
-    }
-
-    console.log('录音文件已读取：', {
-      voice_id: voiceId,
-      bytes: audioBuffer.length
-    })
-
-    // 11. 转成 Base64
-    const audioBase64 = audioBuffer.toString('base64')
+    const tempUrlMs = Date.now() - urlStartedAt
 
     // 12. 初始化腾讯云 ASR 客户端
     const client = new AsrClient({
@@ -190,22 +188,18 @@ exports.main = async (event, context) => {
       }
     })
 
-    // 13. 一句话识别参数
+    // 12. 一句话识别参数
     const params = {
       // 我们当前录音设置为 16kHz 中文普通话
       EngSerViceType: '16k_zh',
 
-      // 直接上传音频数据
-      SourceType: 1,
+      // 由腾讯 ASR 通过短时签名 URL 直接读取 CloudBase 云存储文件。
+      SourceType: 0,
 
       // 当前录音格式
       VoiceFormat: 'mp3',
 
-      // Base64 音频
-      Data: audioBase64,
-
-      // 注意：这里是 Base64 编码前的原始字节长度
-      DataLen: audioBuffer.length,
+      Url: tempFileURL,
 
       // 暂时不需要词级时间戳
       WordInfo: 0
@@ -215,11 +209,14 @@ exports.main = async (event, context) => {
       voice_id: voiceId,
       format: 'mp3',
       engine: '16k_zh',
-      data_length: audioBuffer.length
+      source_type: 'cloud_storage_url'
     })
 
     // 14. 调用腾讯云一句话识别
+    const asrStartedAt = Date.now()
     const asrResult = await client.SentenceRecognition(params)
+    const asrMs = Date.now() - asrStartedAt
+    const totalMs = Date.now() - startedAt
 
     console.log('腾讯云 ASR 返回：', {
       voice_id: voiceId,
@@ -245,6 +242,10 @@ exports.main = async (event, context) => {
           asr_status: 'success',
           asr_request_id: asrResult.RequestId || '',
           asr_audio_duration: asrResult.AudioDuration || null,
+          asr_source_type: 'cloud_storage_url',
+          asr_temp_url_ms: tempUrlMs,
+          asr_request_ms: asrMs,
+          asr_total_ms: totalMs,
           asr_error: '',
           updated_at: db.serverDate()
         }
@@ -282,7 +283,14 @@ exports.main = async (event, context) => {
       asr: {
         status: 'success',
         request_id: asrResult.RequestId || '',
-        audio_duration: asrResult.AudioDuration || null
+        audio_duration: asrResult.AudioDuration || null,
+        source_type: 'cloud_storage_url'
+      },
+
+      performance_ms: {
+        temp_url: tempUrlMs,
+        asr_request: asrMs,
+        total: totalMs
       }
     }
 
@@ -335,7 +343,8 @@ exports.main = async (event, context) => {
     return {
       success: false,
       code: 'ASR_ERROR',
-      message: error.message || '语音识别失败'
+      message: error.message || '语音识别失败',
+      processing_ms: Date.now() - startedAt
     }
   }
 }
