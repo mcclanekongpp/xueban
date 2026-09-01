@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证。Teacher / Student 首次模型自动分析、构建和 `automatic_initial` 激活也已部署，并由隔离 TEST Teacher / Student 验证固定 13 / 17 变量、Subject 指针和幂等性。独立《声纹授权协议》、近 60 秒语音恢复、联合 Student 采集和 Progress 并发保护已进入候选版 `1.0.11`。`teacher_bind_codes`、`teacher_student_collection_access`、`voice_consents`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian / Teacher Collector 仅能通过云函数访问已授权 Student 的安全字段，不能读取原始 Evidence、内部 reasoning、任何身份 hash 或其他 Student 数据。
+规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证。Teacher / Student 首次模型自动分析、构建和 `automatic_initial` 激活也已部署，并由隔离 TEST Teacher / Student 验证固定 13 / 17 变量、Subject 指针和幂等性。独立《声纹授权协议》、59 秒语音安全边界、联合 Student 采集和 Progress 并发保护已进入候选版 `1.0.12`。`teacher_bind_codes`、`teacher_student_collection_access`、`voice_consents`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian / Teacher Collector 仅能通过云函数访问已授权 Student 的安全字段，不能读取原始 Evidence、内部 reasoning、任何身份 hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -51,9 +51,9 @@ status：unused / used / revoked / expired。数据库只保存高熵随机 code
 status：active / revoked。结构允许一个 user 绑定多个孩子；Student MVP 暂时限制一个 Student_ID 同时只有一个 active guardian binding。该集合不会改变 users.role。
 
 ## 9A. teacher_student_collection_access
-Teacher 作为 Student 采集操作者的授权关系。字段：access_id、user_id、teacher_subject_id、student_subject_id、school_id、class_id、source_bind_id、access_role = teacher_collector、status、is_test、created_at、updated_at、last_used_at、revoked_at。
+Teacher 作为 Student 采集操作者的授权关系。字段：access_id、user_id、teacher_subject_id、student_subject_id、school_id、class_id、source_bind_id、bind_code_hint、access_role = teacher_collector、status、is_test、created_at、updated_at、last_used_at、revoked_at。
 
-status：active / revoked。同一 `teacher_subject_id + student_subject_id` 只能有一条 active access；重复输入同一 Student Code 幂等返回。创建和每次使用都必须复核 Teacher identity、Teacher / Student active Subject 以及双方至少一个 active shared Class。Teacher 自己的首次采集进度、Evidence、Model 和 current snapshot 不参与授权判断。集合为 ADMINONLY。
+status：active / revoked。同一 `teacher_subject_id + student_subject_id` 只能有一条 active access；重复输入同一 Student Code 幂等返回。`bind_code_hint` 只保存成功输入码的末 4 位，用于已关联学生列表直接显示这 4 位；完整 Bind Code 仍只保存 hash，历史 access 缺失 hint 时显示 `----`。创建和每次使用都必须复核 Teacher identity、Teacher / Student active Subject 以及双方至少一个 active shared Class。Teacher 自己的首次采集进度、Evidence、Model 和 current snapshot 不参与授权判断。集合为 ADMINONLY。
 
 ## Subject Binding 集合权限
 `schools`、`classes`、`class_memberships`、`teacher_bind_codes`、`student_bind_codes`、`guardian_student_bindings`、`teacher_student_collection_access` 与 `identity_map` 必须保持 ADMINONLY，只能由管理员或云函数读写。绑定接口只返回 Subject、binding/access 和安全组织字段，不返回历史编号、任何 hash、Guardian 信息或明文 bind code。
@@ -102,7 +102,7 @@ V1.0 字段：consent_id、user_id、subject_id、subject_type、consent_version
 
 新转写成功记录另含 `asr_mode`、`asr_source_type`、`asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms`。正常短录音使用 `asr_mode = sentence`、`asr_source_type = cloud_storage_url`，腾讯 ASR 直接读取短时有效签名 URL；URL 本身不保存到数据库、不写日志、不返回前端。
 
-微信端报告接近 60 秒但 MP3 编码后媒体时长超过 60 秒时，原始 `file_id`、`duration_ms` 和云文件保持不变；仅识别用内存副本按完整 MP3 帧去掉尾部编码填充。成功记录使用 `asr_mode = sentence_trimmed_copy`、`asr_source_type = inline_trimmed_copy`，并保存 `asr_trimmed_bytes` 与 `asr_trimmed_duration_ms`。这两个字段描述识别副本，不代表原始研究音频被修改。历史成功记录缺少以上字段时继续兼容。
+正式前端统一在 59 秒自动停止。数据库报告达到 59 秒，或腾讯 ASR 仍判断媒体超过 60 秒时，原始 `file_id`、`duration_ms` 和云文件保持不变；仅识别用内存副本按完整 MP3 帧裁到 59 秒以内。成功记录使用 `asr_mode = sentence_trimmed_copy`、`asr_source_type = inline_trimmed_copy`，并保存 `asr_trimmed_bytes` 与 `asr_trimmed_duration_ms`。失败记录可增加 `asr_failure_code`、`asr_retake_required`；明确时长限制使用 `ASR_DURATION_LIMIT`，无有效语音使用 `ASR_NO_SPEECH`，两者均要求重录但不删除原始 Voice / Message。历史记录缺少以上字段时继续兼容。
 
 后续建议逐步补：collection_event_id。
 

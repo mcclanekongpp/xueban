@@ -51,13 +51,14 @@ Page({
         throw new Error((result && result.message) || '确认学生失败')
       }
       this.setData({ bindCode: '' })
+      wx.hideLoading()
       wx.showToast({ title: result.idempotent ? '已关联该学生' : '关联成功', icon: 'success' })
       await this.loadAccesses()
     } catch (error) {
       console.error('确认学生绑定码失败：', error)
+      wx.hideLoading()
       wx.showToast({ title: error.message || '确认失败', icon: 'none', duration: 2500 })
     } finally {
-      wx.hideLoading()
       this.setData({ submitting: false })
     }
   },

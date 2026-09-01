@@ -24,6 +24,10 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex')
 }
 
+function bindCodeHint(normalizedCode) {
+  return normalizedCode.slice(-4)
+}
+
 function deterministicDocId(prefix, value) {
   return `${prefix}_${sha256(value).slice(0, 24).toUpperCase()}`
 }
@@ -64,8 +68,9 @@ function safeStudent(subject) {
 }
 
 function asDate(value) {
+  if (value === null || value === undefined || value === '') return null
   const raw = value && value.$date ? value.$date : value
-  const date = raw instanceof Date ? raw : new Date(raw || 0)
+  const date = raw instanceof Date ? raw : new Date(raw)
   return Number.isNaN(date.getTime()) ? null : date
 }
 
@@ -247,6 +252,9 @@ exports.main = async (event = {}) => {
         school_id: sharedOrganization.school_id,
         class_id: sharedOrganization.class_id,
         source_bind_id: bindRecord.bind_id,
+        // 只保存末 4 位用于教师端辨认已关联学生；完整 Bind Code 仍然
+        // 只以 hash 存在 student_bind_codes，不能从数据库反向恢复。
+        bind_code_hint: bindCodeHint(normalizedCode),
         access_role: 'teacher_collector',
         status: 'active',
         is_test: bindRecord.is_test === true && teacherResult.data[0].is_test === true,

@@ -3,6 +3,10 @@ const {
   checkVoiceConsent,
   requireVoiceConsent
 } = require('../../utils/voice-consent')
+const {
+  createVoiceRecorderOptions,
+  validateVoiceRecordingResult
+} = require('../../utils/voice-recording')
 
 function decodeQueryValue(value) {
   try {
@@ -22,6 +26,7 @@ Page({
     isTranscribing: false,
     isSubmitting: false,
     asrFailed: false,
+    asrRetakeRequired: false,
     currentVoiceId: '',
     lastTranscript: '',
     canSubmit: false,
@@ -84,7 +89,16 @@ Page({
     })
     recorderManager.onStop((result) => {
       this.setData({ isRecording: false })
-      this.processRecording(result)
+      const recording = validateVoiceRecordingResult(result)
+      if (!recording.valid) {
+        wx.showModal({
+          title: '请重新录制',
+          content: recording.message,
+          showCancel: false
+        })
+        return
+      }
+      this.processRecording(recording)
     })
   },
 
@@ -156,13 +170,7 @@ Page({
       return
     }
 
-    recorderManager.start({
-      duration: 60000,
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      encodeBitRate: 48000,
-      format: 'mp3'
-    })
+    recorderManager.start(createVoiceRecorderOptions())
   },
 
   stopRecording() {
@@ -182,6 +190,7 @@ Page({
       isUploading: true,
       canSubmit: false,
       asrFailed: false,
+      asrRetakeRequired: false,
       lastTranscript: '',
       currentVoiceId: ''
     })
@@ -242,12 +251,16 @@ Page({
       const transcript = String(result && result.transcript ? result.transcript : '').trim()
 
       if (!result || result.success !== true || !transcript) {
-        throw new Error((result && result.message) || '没有识别到有效内容')
+        const asrError = new Error((result && result.message) || '没有识别到有效内容')
+        asrError.code = result && result.code ? result.code : ''
+        asrError.retakeRequired = result && result.retake_required === true
+        throw asrError
       }
 
       this.setData({
         isTranscribing: false,
         asrFailed: false,
+        asrRetakeRequired: false,
         lastTranscript: transcript,
         canSubmit: true
       })
@@ -258,9 +271,16 @@ Page({
       this.setData({
         isTranscribing: false,
         asrFailed: true,
+        asrRetakeRequired: error.retakeRequired === true,
         canSubmit: false
       })
-      wx.showToast({ title: '暂时没听清，可以重试', icon: 'none' })
+      wx.showToast({
+        title: error.retakeRequired === true
+          ? (error.message || '这段录音无法识别，请重新录制')
+          : '暂时没听清，可以重试',
+        icon: 'none',
+        duration: 3000
+      })
     } finally {
       wx.hideLoading()
     }
@@ -268,6 +288,17 @@ Page({
 
   retryTranscription() {
     this.transcribeCurrentVoice()
+  },
+
+  retakeRecording() {
+    this.setData({
+      currentVoiceId: '',
+      lastTranscript: '',
+      asrFailed: false,
+      asrRetakeRequired: false,
+      canSubmit: false
+    })
+    wx.showToast({ title: '请重新录制，单次最多59秒', icon: 'none' })
   },
 
   async submitContinuous() {

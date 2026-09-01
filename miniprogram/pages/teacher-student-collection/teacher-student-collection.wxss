@@ -12,10 +12,8 @@ page { background: #f5f7fa; color: #1f2937; }
 .state-card { color: #7b8491; text-align: center; }
 .student-card { margin-bottom: 22rpx; }
 .student-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; }
-.student-name { font-size: 32rpx; font-weight: 700; }
-.student-code { margin-top: 8rpx; color: #798290; font-size: 24rpx; word-break: break-all; }
+.student-code { color: #334155; font-size: 29rpx; font-weight: 700; letter-spacing: 1rpx; word-break: break-all; }
 .progress-badge { flex: none; padding: 8rpx 16rpx; border-radius: 999rpx; color: #2468ae; background: #e9f3ff; font-size: 24rpx; }
-.organization { margin-top: 18rpx; color: #697386; font-size: 26rpx; }
 .actions { display: flex; flex-wrap: wrap; gap: 14rpx; margin-top: 24rpx; }
 .action { margin: 0; padding: 0 20rpx; height: 68rpx; line-height: 68rpx; border-radius: 14rpx; color: #31516f; background: #f2f5f8; font-size: 25rpx; }
 .action::after { border: none; }

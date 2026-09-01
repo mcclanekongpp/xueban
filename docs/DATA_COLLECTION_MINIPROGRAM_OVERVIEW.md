@@ -6,7 +6,7 @@
 >
 > 核对依据：当前本地代码、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`
 >
-> 当前已上传候选版本：微信小程序开发版 `1.0.11`（2026-09-02 01:05 CST，848460 bytes；尚未提交审核或正式发布）。
+> 当前已上传候选版本：微信小程序开发版 `1.0.12`（2026-09-02 02:51 CST，851559 bytes；尚未提交审核或正式发布）。
 >
 > 当前前沿状态：Teacher / Student 首次模型采用无人工审核的自动构建/激活，并提供 researcher/admin 只读主体构建总览。Teacher / Student 单 Bind Code、Guardian + 同班 Teacher 共同操作同一 Student_ID、共享 Progress 和统一 Student Operator 授权已部署，并以隔离 TEST 数据完成云端验收；历史 no hash 字段只作兼容，不再参与新流程。
 
@@ -955,7 +955,7 @@ Model Snapshot
 | researcher/admin 主体构建总览 | 已部署；普通 Teacher 跨主体请求已实测被拒绝 |
 | 发布/审核 TEST 绑定凭据 | 独立 TEST Teacher / Student 各一组；2026-09-01 只读核验均为 `unused` |
 | Teacher / Student 并发 | 50 路混合读取全部成功；同一 Student 同题 10 路幂等成功；20 路热点写最终一致但有 1 次瞬时冲突 |
-| 微信开发版本 | `1.0.11` 已上传，代码包 848460 bytes |
+| 微信开发版本 | `1.0.12` 已上传，代码包 851559 bytes；含59秒录音安全边界与关联学生末四位显示 |
 | 微信审核 | 尚未提交 |
 | 正式发布 | 尚未发布 |
 
@@ -1097,7 +1097,7 @@ Evidence
 
 在不扩大研究架构的前提下，近期顺序应是：
 
-1. 在微信公众平台核对隐私保护指引，提交 `1.0.11` 审核；
+1. 在微信公众平台核对隐私保护指引，提交 `1.0.12` 审核；
 2. 审核通过后发布小程序；
 3. 组织真人教师、家长和学生试采；
 4. 根据真实语音、ASR、交互负担和自动更新质量修复阻断问题。

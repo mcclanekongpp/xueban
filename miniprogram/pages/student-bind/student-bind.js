@@ -65,6 +65,7 @@ Page({
       const result = res && res.result ? res.result : null
 
       if (!result || result.success !== true) {
+        wx.hideLoading()
         wx.showToast({
           title: (result && result.message) || '绑定失败，请重试',
           icon: 'none',
@@ -73,6 +74,7 @@ Page({
         return
       }
 
+      wx.hideLoading()
       getApp().globalData.currentStudentBinding = {
         binding_id: result.binding.binding_id,
         status: result.binding.status,
@@ -83,12 +85,12 @@ Page({
       wx.redirectTo({ url: '/pages/student-home/student-home' })
     } catch (error) {
       console.error('bindSubjectByCode 学生绑定失败：', error)
+      wx.hideLoading()
       wx.showToast({
         title: '绑定失败，请重试',
         icon: 'none'
       })
     } finally {
-      wx.hideLoading()
       this.setData({ submitting: false })
     }
   }

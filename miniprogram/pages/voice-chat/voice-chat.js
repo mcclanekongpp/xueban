@@ -11,6 +11,10 @@ const {
   checkVoiceConsent,
   requireVoiceConsent
 } = require('../../utils/voice-consent')
+const {
+  createVoiceRecorderOptions,
+  validateVoiceRecordingResult
+} = require('../../utils/voice-recording')
 
 function decodeQueryValue(value) {
   try {
@@ -37,6 +41,10 @@ Page({
     // 原始 Voice / Message 已保存，但 ASR 尚未成功。此状态下必须保留
     // currentVoiceId 并允许重试，不能让下一次录音覆盖待恢复记录。
     asrFailed: false,
+
+    // 只有云端明确判断当前音频无法安全进入一句话识别时才要求重录。
+    // 清除的只是页面待提交引用，已保存的原始 Voice 不会被删除。
+    asrRetakeRequired: false,
 
     // 首次访谈：
     // 完成本题
@@ -235,12 +243,32 @@ Page({
           )
 
 
+          const recording =
+            validateVoiceRecordingResult(res)
+
+
+          if (!recording.valid) {
+            this.setData({
+              isRecording: false,
+              audioTempFilePath: '',
+              duration: 0
+            })
+
+            wx.showModal({
+              title: '请重新录制',
+              content: recording.message,
+              showCancel: false
+            })
+            return
+          }
+
+
           const tempFilePath =
-            res.tempFilePath
+            recording.tempFilePath
 
 
           const duration =
-            res.duration
+            recording.duration
 
 
           this.setData({
@@ -924,23 +952,8 @@ Page({
       }
 
 
-      const options = {
-
-        duration:
-          60000,
-
-        sampleRate:
-          16000,
-
-        numberOfChannels:
-          1,
-
-        encodeBitRate:
-          48000,
-
-        format:
-          'mp3'
-      }
+      const options =
+        createVoiceRecorderOptions()
 
 
       console.log(
@@ -1020,6 +1033,9 @@ Page({
           true,
 
         asrFailed:
+          false,
+
+        asrRetakeRequired:
           false,
 
         // 首次采集补充录音期间也先禁用提交，防止新录音尚未完成保存/
@@ -1313,14 +1329,22 @@ Page({
           !asrRes.result ||
           !asrRes.result.success
         ) {
-
-          throw new Error(
+          const asrError = new Error(
             (
               asrRes.result &&
               asrRes.result.message
             ) ||
             '语音识别失败'
           )
+          asrError.code =
+            asrRes.result &&
+            asrRes.result.code
+              ? asrRes.result.code
+              : ''
+          asrError.retakeRequired =
+            asrRes.result &&
+            asrRes.result.retake_required === true
+          throw asrError
         }
 
 
@@ -1352,6 +1376,9 @@ Page({
             hasTranscript,
 
           asrFailed:
+            false,
+
+          asrRetakeRequired:
             false
         })
 
@@ -1386,6 +1413,9 @@ Page({
           asrFailed:
             Boolean(this.data.currentVoiceId),
 
+          asrRetakeRequired:
+            error.retakeRequired === true,
+
           canCompleteTask:
             false
         })
@@ -1394,11 +1424,15 @@ Page({
         wx.showToast({
 
           title:
-            error.message ||
-            '语音识别失败',
+            error.retakeRequired === true
+              ? (error.message || '这段录音无法识别，请重新录制')
+              : (error.message || '语音识别失败'),
 
           icon:
-            'none'
+            'none',
+
+          duration:
+            3000
         })
 
 
@@ -1412,6 +1446,32 @@ Page({
             false
         })
       }
+    },
+
+
+  // ==================================================
+  // 放弃本页待提交引用并重新录制。
+  // 原始 Voice / Message 已在云端保留，不执行删除。
+  // ==================================================
+
+  retakeRecording:
+    function () {
+
+      this.setData({
+        currentVoiceId: '',
+        lastTranscript: '',
+        cloudFileId: '',
+        audioTempFilePath: '',
+        duration: 0,
+        asrFailed: false,
+        asrRetakeRequired: false,
+        canCompleteTask: false
+      })
+
+      wx.showToast({
+        title: '请重新录制，单次最多59秒',
+        icon: 'none'
+      })
     },
 
 

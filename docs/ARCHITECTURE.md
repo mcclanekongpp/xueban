@@ -2,7 +2,7 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 单 Bind Code 与 Guardian + 同班 Teacher 共同构建同一 Student 的机制已部署到 `model-dev-d9gkoyaolb464c28d`，隔离 TEST 云端验收覆盖 10 项绑定顺序/幂等/跨班/多教师规则和共享 Progress。持续模型规则驱动自动更新、首次模型无人工审核激活及 researcher/admin 只读总览保持不变。独立《声纹授权协议》、60 秒 ASR 兼容、前端失败恢复及 Student Progress 并发保护已进入微信开发候选版 `1.0.11`；该版本已上传但尚未提交审核或正式发布。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 单 Bind Code 与 Guardian + 同班 Teacher 共同构建同一 Student 的机制已部署到 `model-dev-d9gkoyaolb464c28d`，隔离 TEST 云端验收覆盖 10 项绑定顺序/幂等/跨班/多教师规则和共享 Progress。持续模型规则驱动自动更新、首次模型无人工审核激活及 researcher/admin 只读总览保持不变。独立《声纹授权协议》、59 秒录音安全边界、近上限主动识别副本、静音重录提示、关联学生末四位脱敏展示及 Student Progress 并发保护已进入已上传的微信开发候选版 `1.0.12`；尚未提交审核或正式发布。
 
 Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。已部署的自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
@@ -178,11 +178,12 @@ Model Change Candidate 只考察 current active snapshot 之后的新 continuous
 
 AI 综合输出还必须通过 100 字概览、候选变量精确匹配和固定 13 / 17 变量完整性校验。无法由情境或时间差异解释的冲突会进入 `awaiting_additional_evidence`，同一批证据不会反复尝试；至少出现新的 supportive usable Evidence 后才重新评估。自动 snapshot 使用确定性 ID 保证重试幂等；激活事务只把当前父 snapshot 转为 superseded，并更新 Subject 指针。旧的 `build_draft / resolve_contradiction / approve_draft` 继续保留为受控兼容/恢复接口，但不再是正常持续采集链的必经步骤。
 
-## 0.7 语音与分析性能 V1.1
+## 0.7 语音与分析性能 V1.2
 
 - `transcribeVoice` 直接把云存储临时签名 URL 交给腾讯一句话识别，避免云函数下载、Base64 编码和再次上传完整 MP3；临时 URL 不保存、不回传。
-- 微信录音上限保持 60 秒。若 MP3 编码尾部填充使媒体时长略超 60 秒，原始 `file_id` 对应文件不裁切、不覆盖；云函数下载内存副本、按完整 MP3 帧裁到 59.85 秒以内，再使用已有权限的一句话识别。该路径不生成第二条 Voice / Message。
-- Teacher 首次/持续、Student 首次/持续都采用“原音先落库 → ASR → 展示文字 → 用户确认提交”。ASR 失败时保留 `currentVoiceId`，显示重试状态并禁止新录音覆盖；只有转写成功才启用提交。
+- Teacher 首次/教学反思/学生观察、Student 首次/持续共用的三个实际录音页面统一在 59 秒自动停止，为 MP3 编码填充预留安全余量；若平台异常报告超过 60 秒，前端不上传并提示重新录制。
+- 对 `duration_ms >= 59000` 的录音，`transcribeVoice` 主动下载内存副本、按完整 MP3 帧裁到 59 秒以内再识别；更短录音若仍命中时长限制也进入同一兜底。原始 `file_id` 对应文件不裁切、不覆盖，该路径不生成第二条 Voice / Message。
+- Teacher 首次/持续、Student 首次/持续都采用“原音先落库 → ASR → 展示文字 → 用户确认提交”。普通失败保留 `currentVoiceId` 并允许重试；明确的时长限制显示重新录制，原始 Voice / Message 继续保留。只有转写成功才启用提交。
 - `voice_records` 增加 ASR 分段耗时、`asr_mode`、`asr_source_type`、`asr_trimmed_bytes` 与 `asr_trimmed_duration_ms`，以区分获取临时 URL、腾讯 ASR、60 秒兼容副本和整体云函数耗时。
 - 多变量 Analysis 从前端串行 N 次云函数调用改为一次 `analyze_batch`，云函数内部每批最多并发 3 条；每条仍使用独立协议、独立记录和幂等检查。
 - 批量 Analysis 与 Evidence Health 正式回包均使用精简字段；健康层和自动更新在 Analysis 落库后异步执行，不阻塞页面成功反馈。
@@ -197,7 +198,7 @@ AI 综合输出还必须通过 100 字概览、候选变量精确匹配和固定
 - 普通 Guardian / Teacher Collector 不直接访问数据库，只能经云函数读取已授权 Student 的安全模型摘要，不能读取原始 Evidence、内部 reasoning、历史编号 hash 或 `bind_code_hash`。所有学生采集授权统一由 `authorizeStudentOperator` 校验 Guardian binding 或 Teacher collector access；Teacher 仍不能读取未授权或已失去 shared Class 的 Student。
 - 教师首页持续采集只保留 `teaching_reflection` 与 `student_observation` 两个正式入口；`free_dialogue` 只作历史数据和旧链接兼容。重复的泛化语音入口和未开发的记录中心不进入正式页面。Teacher Record Center 作为非阻断 TODO 保留。
 - 教师/学生逐项采集采用一致的页面宽度、进度、任务卡、录音、提交与状态反馈结构；教师/学生模型采用一致的总体概览、构建进度雷达图、版本状态、一级维度、二级变量、四级状态标签、当前描述与可选不确定性结构。学生采集文案继续保持儿童友好，不显示技术术语；构建进度明确标注为覆盖指标而非能力或质量评价。
-- 微信小程序开发候选版 `1.0.11` 已上传，包含独立声纹授权、近 60 秒语音恢复、Teacher / Student 单绑定码、Guardian + Teacher 联合采集与 Student Progress 并发保护。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
+- 微信小程序开发候选版 `1.0.12` 已上传，包含独立声纹授权、59 秒录音安全边界、近上限语音恢复、Teacher / Student 单绑定码、Guardian + Teacher 联合采集、关联学生脱敏展示与 Student Progress 并发保护。微信公众平台隐私声明确认、提交审核与正式发布仍属于平台管理员操作。
 
 ### 0.8.1 真人采集并发边界
 

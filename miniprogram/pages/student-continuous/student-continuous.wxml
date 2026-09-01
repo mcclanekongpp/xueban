@@ -35,12 +35,20 @@
         <view class="voice-text">{{isRecording ? '正在听你说' : '按住说话'}}</view>
       </view>
       <view class="voice-tip">
-        {{isRecording ? '松开结束录音' : isSubmitting ? '正在分析并提交' : isUploading ? '正在保存录音' : isTranscribing ? '正在识别语音' : '单次最多1分钟，达到上限会自动保存'}}
+        {{isRecording ? '松开结束录音' : isSubmitting ? '正在分析并提交' : isUploading ? '正在保存录音' : isTranscribing ? '正在识别语音' : '单次最多59秒，达到上限会自动停止并保存'}}
       </view>
     </view>
 
     <button
-      wx:if="{{asrFailed}}"
+      wx:if="{{asrFailed && asrRetakeRequired}}"
+      class="retry-button"
+      bindtap="retakeRecording"
+    >
+      重新录制
+    </button>
+
+    <button
+      wx:elif="{{asrFailed}}"
       class="retry-button"
       disabled="{{isTranscribing}}"
       bindtap="retryTranscription"
@@ -49,7 +57,7 @@
     </button>
 
     <view wx:if="{{asrFailed}}" class="retry-tip">
-      原始录音已经保存，不会丢失；识别成功后再确认提交。
+      {{asrRetakeRequired ? '原始录音已经保留，但这段录音无法形成有效文字；请检查麦克风并重新录制，单次最多59秒。' : '原始录音已经保存，不会丢失；识别成功后再确认提交。'}}
     </view>
 
     <button

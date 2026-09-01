@@ -10,7 +10,7 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 单 Bind Code 以及 Guardian + 同班 Teacher 共同操作同一 Student_ID 的机制已部署并通过隔离 TEST 云端验收；Student 全链统一使用 `authorizeStudentOperator`，共享一份 Progress、Evidence 池和 Model 版本链。首次模型自动激活、构建进度/提示、持续证据健康与规则驱动 revision 保持不变。独立《声纹授权协议》、近 60 秒 ASR 恢复、单绑定码联合采集及 Student Progress 并发冲突重试已经进入微信开发候选版 `1.0.11`；该版本已上传，尚未提交审核或正式发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 单 Bind Code 以及 Guardian + 同班 Teacher 共同操作同一 Student_ID 的机制已部署并通过隔离 TEST 云端验收；Student 全链统一使用 `authorizeStudentOperator`，共享一份 Progress、Evidence 池和 Model 版本链。首次模型自动激活、构建进度/提示、持续证据健康与规则驱动 revision 保持不变。独立《声纹授权协议》、59 秒录音安全边界、近上限主动识别副本、无有效语音重录提示、单绑定码联合采集及 Student Progress 并发冲突重试均已进入微信开发候选版 `1.0.12`；该版本已上传，尚未提交审核或正式发布。
 
 微信审核整改新增独立《声纹授权协议》：任何 Teacher / Student 首次或持续录音在真正调用麦克风前，都必须校验当前微信 user 与当前 Subject 的 `voice_consents` V1.0 active 记录。教师本人授权以其 Teacher Subject 为边界；Student 授权以当前合法 operator user + 单个 Student_ID 为边界，Guardian 与 Teacher Collector 均不得绕过或跨 Student 共用。授权查询失败、身份关系不成立或未主动同意时一律不调用录音。该授权只处理语音及可能包含的声纹敏感个人信息，不替代线下纸质研究知情同意。
 
@@ -169,10 +169,11 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - Student Home 的后续提示由 `getSubjectModelGuidance` 根据 supportive Evidence 的数量、充分性、情境与时间覆盖动态排序；提示问题不绑定变量，`analyzeStudentEvidence(action = route_continuous)` 仍按实际语音内容返回 0—5 个变量，允许 0 匹配。
 - TEST Student 已完成一次 12.16 秒真机持续录音、腾讯 ASR、3 条路由 Evidence 与 3 条正式 Analysis 的端到端验证。
 
-## 语音处理性能 V1.1
+## 语音处理性能 V1.2
 - `transcribeVoice` 使用云存储临时签名 URL 调用腾讯一句话识别，不再由云函数下载完整 MP3、转 Base64 后再上传给 ASR；临时 URL 不写日志、不返回前端。
-- 微信端仍允许单次完整录音到 60 秒。若 MP3 编码填充使媒体时长变为 60.0x 秒，原始云文件保持不变；云函数只在内存中按完整 MP3 帧去掉尾部填充到 59.85 秒以内，再调用同一 ASR，记录 `asr_mode = sentence_trimmed_copy` 与裁切字节数。
-- Voice 成功转写继续幂等复用；失败仍保留原始云文件、Voice 和 Message。教师首次/持续、学生首次/持续页面都保留 `currentVoiceId`，显示重试入口，转写成功后才允许用户确认提交，待重试录音不得被下一条录音覆盖。
+- Teacher 首次/教学反思/学生观察、Student 首次/持续三个实际录音页面统一在 59 秒自动停止，为微信 MP3 编码填充预留安全余量；平台若异常返回超过 60 秒的报告时长，前端不上传并提示重新录制。
+- 对数据库报告达到 59 秒的近上限录音，云函数主动在内存中按完整 MP3 帧制作 59 秒以内识别副本；更短录音若仍命中 60 秒限制也使用同一兜底。原始云文件始终不裁切、不覆盖，记录 `asr_mode = sentence_trimmed_copy` 与裁切字节数。
+- Voice 成功转写继续幂等复用；失败仍保留原始云文件、Voice 和 Message。普通失败显示重新识别；明确时长限制时显示重新录制，清除的只是在当前页面的待提交引用。转写成功后才允许用户确认提交。
 - `voice_records` 记录 `asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms`、`asr_mode` 和 `asr_source_type`，用于区分临时 URL、ASR、60 秒兼容副本和整体耗时。
 - 持续记录命中多个变量时使用批量并发 Analysis；证据健康层异步刷新且使用精简回包，不再增加用户等待时间。AI 路由和首次冷启动仍可能产生数秒等待，不能以降低证据门槛换取速度。
 
@@ -183,7 +184,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
 - 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
-- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.11` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
+- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.12` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
 
 ## 数据与隐私原则
 1. 身份信息与研究主体信息分离。
@@ -214,8 +215,8 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 7. 真人试采候选版本 `1.0.7` 上传（已完成，已被后续候选版替代）
 8. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
 9. 规则驱动持续模型自动更新（已部署，已用 TEST Student 完成云端自动激活与幂等验证）
-10. 小程序开发候选版 `1.0.11` 上传与 TEST 并发验收（已完成）
-11. 微信平台隐私核对、提交 `1.0.11` 审核并发布
+10. 小程序开发候选版 `1.0.12` 上传与 TEST 并发验收（已完成）
+11. 微信平台隐私核对、提交 `1.0.12` 审核并发布
 12. 组织真人小样本采集，按当前安全并发线逐步扩容
 13. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
 14. 主体复现

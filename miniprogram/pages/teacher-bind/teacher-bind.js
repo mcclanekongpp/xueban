@@ -61,6 +61,7 @@ Page({
       const result = res && res.result ? res.result : null
 
       if (!result || result.success !== true) {
+        wx.hideLoading()
         wx.showToast({
           title: result && result.message || '绑定失败，请重试',
           icon: 'none',
@@ -69,6 +70,7 @@ Page({
         return
       }
 
+      wx.hideLoading()
       const app = getApp()
       const teacher = result.teacher || result.subject
       app.globalData.currentTeacherBinding = {
@@ -84,9 +86,9 @@ Page({
       wx.reLaunch({ url: '/pages/teacher-home/teacher-home' })
     } catch (error) {
       console.error('bindSubjectByCode 教师绑定失败：', error)
+      wx.hideLoading()
       wx.showToast({ title: '绑定失败，请重试', icon: 'none' })
     } finally {
-      wx.hideLoading()
       this.setData({ submitting: false })
     }
   }

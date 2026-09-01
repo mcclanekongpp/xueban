@@ -5,9 +5,44 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-候选版 `1.0.11` 已替代 `1.0.10`。规则驱动自动 revision V1.0、首次模型无审核自动激活、独立声纹授权、近 60 秒 ASR 恢复、Teacher / Student 单绑定码和 Guardian + Teacher 联合采集均已部署。`1.0.11` 已于 2026-09-02 01:05 CST 上传为微信开发版本，包含本地录音失败恢复和 Student Progress 并发保护；尚未重新提交审核或正式发布。
+候选版 `1.0.12` 已替代 `1.0.11`。规则驱动自动 revision V1.0、首次模型无审核自动激活、独立声纹授权、59 秒录音安全边界、Teacher / Student 单绑定码和 Guardian + Teacher 联合采集均已部署。`1.0.12` 已于 2026-09-02 02:51 CST 上传为微信开发版本，代码包 851559 bytes；尚未提交审核或正式发布。
 
-当前最高优先级：**完成微信公众平台隐私保护指引最终核对，提交 `1.0.11` 审核；通过后发布，并按安全并发线启动真人小样本采集**。
+当前最高优先级：**完成微信公众平台隐私保护指引核对，提交 `1.0.12` 审核并在通过后发布；随后按安全并发线启动真人小样本采集**。
+
+## 真人试采候选版 1.0.12（2026-09-02）
+
+- [x] AppID = `wx962acbf120074da9`，云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] 59 秒录音安全边界、近上限主动识别副本、静音/无有效语音重录提示、绑定空过期兼容、关联学生末四位显示和绑定 Toast 修复均已进入代码包
+- [x] 100 个 JavaScript、123 个非本地私密 JSON、4 组受影响 WXML/WXSS 通过静态/模板编译，`git diff --check` 通过
+- [x] 开发者工具完整刷新后 Console / Network 错误过滤为空；`transcribeVoice`、`bindSubjectByCode`、`authorizeTeacherStudentCollectionByCode`、`getMyTeacherStudentCollectionAccesses` 均为 Active
+- [x] 上传时间 = 2026-09-02 02:51:13 CST，代码包 = 851559 bytes
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
+
+## 59 秒录音安全边界与关联学生脱敏展示（2026-09-02）
+
+- [x] 新失败证据确认：`V_MTI2UDCH_A5KV6` 的前端 `duration_ms = 60000`，实际云 MP3 为 60.120 秒，腾讯一句话识别按媒体真实时长拒绝；原始文件 360720 bytes、Voice / Message 关联均存在，未发生语音丢失
+- [x] 该 MP3 经 `volumedetect` / `silencedetect` 复核为全程静音（0—60.12 秒低于 -60 dB）；因此即使裁短也不应伪造转写，云函数新增 `ASR_NO_SPEECH + retake_required`，明确提示检查麦克风并重录
+- [x] Teacher 首次/教学反思/学生观察、Student 首次、Student Continuous 三个实际录音页面统一复用 `utils/voice-recording.js`，59 秒自动停止；异常报告超过 60 秒时不上传并提示重新录制
+- [x] `transcribeVoice` 对 `duration_ms >= 59000` 主动使用按完整 MP3 帧裁出的 59 秒内存识别副本；同一失败原音本地静态复算得到 58.968 秒安全副本，原云文件不修改
+- [x] 普通 ASR 失败继续保留 `currentVoiceId` 并允许重新识别；明确时长限制时提示重新录制，放弃的只是页面待提交引用，原始 Voice / Message 不删除
+- [x] 已关联学生列表不再展示研究别名、Student_ID、学校、年级或班级；仅直接显示 Student Bind Code 末 4 位（例如 `QZUQ`），不再显示“学生绑定码”文字或完整掩码，完整绑定码仍只保存 hash
+- [x] `transcribeVoice`、`authorizeTeacherStudentCollectionByCode`、`getMyTeacherStudentCollectionAccesses` 已增量部署并确认为 Active；第一次完整部署远程 npm 曾发生一次 SSL 错误，未误报成功，随后仅更新 index.js 成功
+- [x] `getMyTeacherStudentCollectionAccesses` 末四位版本已再次增量部署；既有真实关联补齐 `bind_code_hint = QZUQ`，模拟器确认卡片只显示 `QZUQ` 和 `17 / 17`，不显示研究别名、Student_ID、学校或班级
+- [x] 一年级5班真实采集批次补充登记 6 名 Student Subject（`RC26_G1C5_S26`—`S31`），均为 `is_test = false`、`student_v1.0`、active class membership、`active + unused` Student Code；云端核验 Subject / Membership / Code 各 6 条一致，未保存明文 code 或旧 student_no/hash
+- [x] 受控交付表已由 25 名学生更新为 31 名，追加 6 个随机高熵绑定码并保留纸质同意、发放、Guardian 与 Teacher 协同状态下拉；文件继续位于 `local-private/outputs/real-cohort-20260902/`，不得上传 GitHub
+- [x] 含 59 秒前端限制和关联学生末四位显示的小程序代码已进入 `1.0.12`
+
+## 真人绑定码空过期时间修复（2026-09-02）
+
+- [x] 根因确认：`bindSubjectByCode` 与 `authorizeTeacherStudentCollectionByCode` 的日期兼容函数把 `expires_at = null` 解析为 1970-01-01，导致新建的无固定过期时间 Bind Code 被误判为 expired
+- [x] 两个云函数均改为：null / undefined / 空字符串明确表示“不设过期时间”；真实 revoked / expired / 到期日期规则保持不变
+- [x] 两个函数已重新部署到 `model-dev-d9gkoyaolb464c28d`；两枚真实 Student Code 云端验证不再返回“当前不可用”，而是正确进入 shared Class 授权校验
+- [x] `teacher-bind`、`student-bind`、`teacher-student-collection` 本地改为先关闭 Loading 再显示结果 Toast，避免失败信息被 `hideLoading()` 一并关闭
+- [x] 当前开发微信仍映射既有 Teacher Subject `T_MT78AZ2K_WINH7`，但该 Subject 没有任何 active class_membership；对 `REAL_CLASS_2026_G1C5_001` 学生的两次只读式授权前置验证均正确返回 `TEACHER_STUDENT_CLASS_NOT_SHARED`，未创建 access、未消耗绑定码
+- [x] 本地 JavaScript / JSON 静态检查和开发者工具编译通过；页面失败后 submitting / loading 均恢复 false，绑定码保留供修正关系后重试
+- [x] Toast 反馈修复已进入 `1.0.12`
+- [x] 研究团队按真实背景唯一确认两位教师并建立 active membership：一年级/硕士研究生/数学 `T_MTBD1ZF1_UCA60`，计算机科学与技术/任教科学 `T_MT78AZ2K_WINH7`；两者均加入 `REAL_CLASS_2026_G1C5_001`，未改动原Evidence、模型或身份绑定
 
 ## 真人试采候选版 1.0.11 与并发验收（2026-09-02）
 
@@ -53,7 +88,7 @@
 - [x] 两条原始 MP3 均已完整存在 CloudBase 云存储，`voice_records`、`messages` 和 Teacher Subject 归属未丢失
 - [x] `transcribeVoice` 保留 URL 快速路径；命中 60 秒边界时不修改原云文件，只对内存副本按完整 MP3 帧去掉尾部编码填充，再调用当前已授权的一句话识别
 - [x] 两条受影响教师录音已恢复为 success 并回写对应 Message；识别副本均为 59.832 秒，原始 `file_id` 未改变
-- [x] Teacher initial / teaching reflection / student observation、Student initial / continuous 全部保留 60 秒录音上限并复用同一云端兼容逻辑
+- [x] 历史版本 Teacher initial / teaching reflection / student observation、Student initial / continuous 曾保留 60 秒录音上限；2026-09-02 起由 V1.2 统一改为 59 秒前端安全上限并主动使用近上限识别副本
 - [x] Teacher / Student 三个实际录音页面均增加：ASR 失败时保留 currentVoiceId、显示重试、禁止覆盖、转写成功后才启用提交
 - [x] 教师学生观察、Student initial 和 Student continuous 失败/重试状态已通过开发者工具页面级验证；WXML / WXSS 编译和 Console 检查通过
 - [x] `transcribeVoice` 已部署并为 Active（Nodejs16.13，timeout 60 秒）
@@ -501,7 +536,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 ## 六、当前第一优先级
 
-在微信公众平台完成隐私保护指引最终核对，提交 `1.0.11` 审核；审核通过后发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id，并按并发安全线从小样本逐步扩容。
+在微信公众平台完成隐私保护指引最终核对，提交 `1.0.12` 审核；审核通过后发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id，并按并发安全线从小样本逐步扩容。
 
 ## 七、学生端状态
 

@@ -198,9 +198,17 @@
   class="asr-retry-card"
 >
   <text class="asr-retry-text">
-    刚才的录音已经保存，文字暂未识别成功。请重新识别，成功后再确认提交。
+    {{asrRetakeRequired ? '刚才的原始录音已经安全保留，但这段录音无法形成有效文字。请检查麦克风并重新录制，单次最多59秒。' : '刚才的录音已经保存，文字暂未识别成功。请重新识别，成功后再确认提交。'}}
   </text>
   <button
+    wx:if="{{asrRetakeRequired}}"
+    class="retry-button"
+    bindtap="retakeRecording"
+  >
+    重新录制
+  </button>
+  <button
+    wx:else
     class="retry-button"
     disabled="{{isTranscribing}}"
     bindtap="retryTranscription"
@@ -247,7 +255,7 @@
           ? '正在保存录音'
           : isTranscribing
             ? '正在识别语音'
-            : '单次最多1分钟，达到上限会自动保存'
+            : '单次最多59秒，达到上限会自动停止并保存'
     }}
   </text>
 

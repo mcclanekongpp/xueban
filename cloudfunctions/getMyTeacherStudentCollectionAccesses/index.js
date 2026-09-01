@@ -31,6 +31,17 @@ async function loadProgress(subjectId) {
   }
 }
 
+function maskedBindCode(access) {
+  const hint = String(access && access.bind_code_hint || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(-4)
+
+  // 教师端已关联列表只显示绑定码末 4 位；完整码及其掩码结构都不返回。
+  // 历史 access 若尚未保存 hint，以短横线占位，不展示 Student_ID 或研究别名。
+  return hint || '----'
+}
+
 exports.main = async () => {
   const openid = cloud.getWXContext().OPENID
   if (!openid) return { success: false, code: 'NO_OPENID', message: '未获取到微信用户标识' }
@@ -67,14 +78,13 @@ exports.main = async () => {
         access_id: access.access_id || access._id,
         status: 'active',
         access_role: 'teacher_collector',
+        bind_code_label: maskedBindCode(access),
         student: {
           subject_id: authorization.subject.subject_id,
           subject_type: 'student',
           framework: 'student_v1.0',
-          status: authorization.subject.status,
-          research_alias: authorization.subject.research_alias || ''
+          status: authorization.subject.status
         },
-        organization: authorization.shared_organization,
         progress
       })
     }

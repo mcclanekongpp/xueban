@@ -17,13 +17,9 @@
 
   <view wx:for="{{accesses}}" wx:key="access_id" class="student-card">
     <view class="student-heading">
-      <view>
-        <view class="student-name">{{item.student.research_alias || '学生研究主体'}}</view>
-        <view class="student-code">{{item.student.subject_id}}</view>
-      </view>
+      <view class="student-code">{{item.bind_code_label}}</view>
       <view class="progress-badge">{{item.progress.completed_tasks}} / 17</view>
     </view>
-    <view class="organization">{{item.organization.school_name || item.organization.school_id}} · {{item.organization.class_name || item.organization.class_id}}</view>
     <view class="actions">
       <button class="action primary" data-subject-id="{{item.student.subject_id}}" bindtap="openCollection">{{item.progress.status === 'completed' ? '查看首次采集' : (item.progress.completed_tasks > 0 ? '继续首次采集' : '开始首次采集')}}</button>
       <button class="action" data-subject-id="{{item.student.subject_id}}" bindtap="openModel">查看学生模型</button>

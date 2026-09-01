@@ -37,8 +37,9 @@ function deterministicDocId(prefix, value) {
 }
 
 function asDate(value) {
+  if (value === null || value === undefined || value === '') return null
   const raw = value && value.$date ? value.$date : value
-  const date = raw instanceof Date ? raw : new Date(raw || 0)
+  const date = raw instanceof Date ? raw : new Date(raw)
   return Number.isNaN(date.getTime()) ? null : date
 }
 

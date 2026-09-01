@@ -11,7 +11,11 @@ const db = cloud.database()
 // 腾讯云 ASR Client
 const AsrClient = tencentcloud.asr.v20190614.Client
 
-const SENTENCE_SAFE_DURATION_MS = 59850
+// 腾讯一句话识别按编码后的媒体真实时长执行 60 秒限制。近 60 秒的
+// 微信 MP3 可能包含约 0.1 秒编码填充，因此统一把识别副本控制在
+// 59 秒以内；原始云文件始终保持不变。
+const SENTENCE_SAFE_DURATION_MS = 59000
+const PROACTIVE_SAFE_COPY_THRESHOLD_MS = 59000
 const MAX_INLINE_AUDIO_BYTES = 3 * 1024 * 1024
 
 function isSentenceDurationLimitError(error) {
@@ -354,9 +358,9 @@ exports.main = async (event, context) => {
     })
 
     // 14. 调用腾讯云 ASR。微信 MP3 编码会在真实语音尾部附加少量
-    // 编码填充，可能使 59.9 秒录音被识别为 60.0x 秒。若命中该限制，
-    // 原始云文件保持完全不变；这里只下载到内存，按完整 MP3 帧去掉
-    // 尾部填充到安全时长，再使用当前已有权限的一句话识别。
+    // 编码填充。数据库报告达到 59 秒的录音直接使用内存安全副本，
+    // 不再先发起一次必然有风险的 URL 识别；更短录音若仍命中接口的
+    // 60 秒限制，也会进入同一兜底。原始云文件保持完全不变。
     const asrStartedAt = Date.now()
     let asrMode = 'sentence'
     let asrRequestId = ''
@@ -365,24 +369,12 @@ exports.main = async (event, context) => {
     let asrTrimmedDurationMs = null
     let transcript = ''
 
-    try {
-      const sentenceResult = await client.SentenceRecognition(params)
-
-      asrRequestId = sentenceResult.RequestId || ''
-      asrAudioDuration = sentenceResult.AudioDuration == null
-        ? null
-        : Number(sentenceResult.AudioDuration)
-      transcript = typeof sentenceResult.Result === 'string'
-        ? sentenceResult.Result.trim()
-        : ''
-    } catch (sentenceError) {
-      if (!isSentenceDurationLimitError(sentenceError)) throw sentenceError
-
+    const recognizeSafeCopy = async (reason) => {
       asrMode = 'sentence_trimmed_copy'
-      console.warn('一句话识别检测到 MP3 编码后超过 60 秒，使用内存安全副本：', {
+      console.warn('一句话识别使用 59 秒内存安全副本：', {
         voice_id: voiceId,
         duration_ms: voiceRecord.duration_ms || null,
-        error: sentenceError.message || String(sentenceError)
+        reason
       })
 
       const downloadResult = await cloud.downloadFile({
@@ -409,6 +401,32 @@ exports.main = async (event, context) => {
         : ''
     }
 
+    const reportedDurationMs = Number(voiceRecord.duration_ms || 0)
+    const useProactiveSafeCopy =
+      Number.isFinite(reportedDurationMs) &&
+      reportedDurationMs >= PROACTIVE_SAFE_COPY_THRESHOLD_MS
+
+    if (useProactiveSafeCopy) {
+      await recognizeSafeCopy('reported_duration_near_limit')
+    } else {
+      try {
+        const sentenceResult = await client.SentenceRecognition(params)
+
+        asrRequestId = sentenceResult.RequestId || ''
+        asrAudioDuration = sentenceResult.AudioDuration == null
+          ? null
+          : Number(sentenceResult.AudioDuration)
+        transcript = typeof sentenceResult.Result === 'string'
+          ? sentenceResult.Result.trim()
+          : ''
+      } catch (sentenceError) {
+        if (!isSentenceDurationLimitError(sentenceError)) throw sentenceError
+        await recognizeSafeCopy(
+          sentenceError.message || 'asr_duration_limit'
+        )
+      }
+    }
+
     const asrMs = Date.now() - asrStartedAt
     const totalMs = Date.now() - startedAt
 
@@ -421,7 +439,9 @@ exports.main = async (event, context) => {
     })
 
     if (!transcript) {
-      throw new Error('语音识别未返回有效文字')
+      const noSpeechError = new Error('语音识别未返回有效文字')
+      noSpeechError.code = 'ASR_NO_SPEECH'
+      throw noSpeechError
     }
 
     // 15. 更新 voice_records
@@ -443,6 +463,8 @@ exports.main = async (event, context) => {
           asr_request_ms: asrMs,
           asr_total_ms: totalMs,
           asr_error: '',
+          asr_failure_code: '',
+          asr_retake_required: false,
           updated_at: db.serverDate()
         }
       })
@@ -497,6 +519,17 @@ exports.main = async (event, context) => {
 
   } catch (error) {
     console.error('transcribeVoice error:', error)
+    const durationLimitFailure = isSentenceDurationLimitError(error)
+    const noSpeechFailure = error && error.code === 'ASR_NO_SPEECH'
+    const retakeRequired = durationLimitFailure || noSpeechFailure
+    const failureCode = durationLimitFailure
+      ? 'ASR_DURATION_LIMIT'
+      : (noSpeechFailure ? 'ASR_NO_SPEECH' : 'ASR_ERROR')
+    const failureMessage = durationLimitFailure
+      ? '录音超过语音识别时长限制，请重新录制，单次请控制在59秒以内'
+      : (noSpeechFailure
+          ? '没有识别到清晰语音，请检查麦克风后重新录制'
+          : (error.message || '语音识别失败'))
 
     // 如果能够找到该录音，则尽量把失败状态记录下来
     try {
@@ -526,9 +559,9 @@ exports.main = async (event, context) => {
             .update({
               data: {
                 asr_status: 'failed',
-                asr_error:
-                  error.message ||
-                  '语音识别失败',
+                asr_error: error.message || '语音识别失败',
+                asr_failure_code: failureCode,
+                asr_retake_required: retakeRequired,
                 updated_at: db.serverDate()
               }
             })
@@ -543,8 +576,9 @@ exports.main = async (event, context) => {
 
     return {
       success: false,
-      code: 'ASR_ERROR',
-      message: error.message || '语音识别失败',
+      code: failureCode,
+      message: failureMessage,
+      retake_required: retakeRequired,
       processing_ms: Date.now() - startedAt
     }
   }

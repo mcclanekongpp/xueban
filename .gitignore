@@ -26,3 +26,8 @@ docs/REVIEW_TEST.md
 
 # Encrypted local research backups and local backup keys
 /local-backups/
+
+# Local participant rosters, plaintext bind-code delivery files, and Excel lock files
+/local-private/
+/docs/一5班学生名单.xlsx
+/docs/.~一5班学生名单.xlsx
