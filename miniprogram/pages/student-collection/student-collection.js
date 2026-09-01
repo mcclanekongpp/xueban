@@ -2,6 +2,10 @@ const recorderManager = wx.getRecorderManager()
 const {
   ensureStudentInitialModel
 } = require('../../utils/initial-model-automation')
+const {
+  checkVoiceConsent,
+  requireVoiceConsent
+} = require('../../utils/voice-consent')
 
 Page({
   data: {
@@ -18,7 +22,9 @@ Page({
     lastTranscript: '',
     currentVoiceId: '',
     canSubmit: false,
-    collectionCompleted: false
+    collectionCompleted: false,
+    voiceConsentGranted: false,
+    checkingVoiceConsent: false
   },
 
   async onLoad(options) {
@@ -32,12 +38,30 @@ Page({
     this.setData({ subjectId })
     this.bindRecorderEvents()
     await this.prepareTask()
+    await this.refreshVoiceConsent()
+  },
+
+  async onShow() {
+    if (this.data.subjectId) await this.refreshVoiceConsent()
   },
 
   onUnload() {
     if (typeof recorderManager.offStart === 'function') recorderManager.offStart()
     if (typeof recorderManager.offStop === 'function') recorderManager.offStop()
     if (typeof recorderManager.offError === 'function') recorderManager.offError()
+  },
+
+  async refreshVoiceConsent() {
+    if (!this.data.subjectId || this.data.checkingVoiceConsent) return false
+
+    this.setData({ checkingVoiceConsent: true })
+    const result = await checkVoiceConsent(this.data.subjectId)
+    const granted = result.success && result.hasConsent
+    this.setData({
+      checkingVoiceConsent: false,
+      voiceConsentGranted: granted
+    })
+    return granted
   },
 
   bindRecorderEvents() {
@@ -124,15 +148,30 @@ Page({
     }
   },
 
-  startRecording() {
+  async startRecording() {
     if (
       this.data.loading ||
       this.data.isRecording ||
       this.data.isUploading ||
       this.data.isTranscribing ||
       this.data.isSubmitting ||
-      this.data.collectionCompleted
+      this.data.collectionCompleted ||
+      this.data.checkingVoiceConsent
     ) return
+
+    if (!this.data.voiceConsentGranted) {
+      this.setData({ checkingVoiceConsent: true })
+      const granted = await requireVoiceConsent(this.data.subjectId)
+      this.setData({
+        checkingVoiceConsent: false,
+        voiceConsentGranted: granted
+      })
+
+      if (granted) {
+        wx.showToast({ title: '授权已确认，请再次按住说话', icon: 'none' })
+      }
+      return
+    }
 
     recorderManager.start({
       duration: 60000,

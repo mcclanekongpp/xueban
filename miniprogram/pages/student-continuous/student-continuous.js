@@ -1,4 +1,8 @@
 const recorderManager = wx.getRecorderManager()
+const {
+  checkVoiceConsent,
+  requireVoiceConsent
+} = require('../../utils/voice-consent')
 
 function decodeQueryValue(value) {
   try {
@@ -21,7 +25,9 @@ Page({
     currentVoiceId: '',
     lastTranscript: '',
     canSubmit: false,
-    guidancePrompt: ''
+    guidancePrompt: '',
+    voiceConsentGranted: false,
+    checkingVoiceConsent: false
   },
 
   async onLoad(options) {
@@ -38,6 +44,11 @@ Page({
     })
     this.bindRecorderEvents()
     await this.prepareSession()
+    await this.refreshVoiceConsent()
+  },
+
+  async onShow() {
+    if (this.data.subjectId) await this.refreshVoiceConsent()
   },
 
   onUnload() {
@@ -45,6 +56,19 @@ Page({
     if (typeof recorderManager.offStart === 'function') recorderManager.offStart()
     if (typeof recorderManager.offStop === 'function') recorderManager.offStop()
     if (typeof recorderManager.offError === 'function') recorderManager.offError()
+  },
+
+  async refreshVoiceConsent() {
+    if (!this.data.subjectId || this.data.checkingVoiceConsent) return false
+
+    this.setData({ checkingVoiceConsent: true })
+    const result = await checkVoiceConsent(this.data.subjectId)
+    const granted = result.success && result.hasConsent
+    this.setData({
+      checkingVoiceConsent: false,
+      voiceConsentGranted: granted
+    })
+    return granted
   },
 
   bindRecorderEvents() {
@@ -97,15 +121,30 @@ Page({
     }
   },
 
-  startRecording() {
+  async startRecording() {
     if (
       this.data.loading ||
       !this.data.sessionId ||
       this.data.isRecording ||
       this.data.isUploading ||
       this.data.isTranscribing ||
-      this.data.isSubmitting
+      this.data.isSubmitting ||
+      this.data.checkingVoiceConsent
     ) return
+
+    if (!this.data.voiceConsentGranted) {
+      this.setData({ checkingVoiceConsent: true })
+      const granted = await requireVoiceConsent(this.data.subjectId)
+      this.setData({
+        checkingVoiceConsent: false,
+        voiceConsentGranted: granted
+      })
+
+      if (granted) {
+        wx.showToast({ title: '授权已确认，请再次按住说话', icon: 'none' })
+      }
+      return
+    }
 
     recorderManager.start({
       duration: 60000,

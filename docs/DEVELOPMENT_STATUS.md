@@ -5,9 +5,42 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-候选版 `1.0.9` 已替代 `1.0.8`。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。Teacher / Student 首次模型自动构建、无人工审核激活以及 researcher/admin 只读构建总览也已部署；隔离 TEST Teacher / Student 已分别完成云端自动 Analysis、`automatic_initial` 激活、Subject 指针和重复调用幂等验证。`1.0.9` 已于 2026-08-31 19:07:57 CST 上传为开发版，尚未提交审核或正式发布。
+候选版 `1.0.10` 已替代 `1.0.9`。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。Teacher / Student 首次模型自动构建、无人工审核激活以及 researcher/admin 只读构建总览也已部署；隔离 TEST Teacher / Student 已分别完成云端自动 Analysis、`automatic_initial` 激活、Subject 指针和重复调用幂等验证。微信首次审核因缺少独立声纹授权协议未通过；整改版 `1.0.10` 已于 2026-09-01 22:22:38 CST 上传为开发版，尚未重新提交审核或正式发布。
 
-当前最高优先级：**在微信公众平台完成隐私保护指引最终核对，提交 `1.0.9` 审核；审核通过后发布**。
+当前最高优先级：**在微信公众平台使用整改说明重新提交 `1.0.10` 审核；审核通过后发布**。
+
+## 独立声纹授权协议整改（2026-09-01）
+
+- [x] 新增 `pages/voice-consent/voice-consent`，完整展示独立《声纹授权协议》；复选框默认不勾选
+- [x] 新增 `voice_consents` 并设置 ADMINONLY，V1.0 按 `user_id + subject_id + consent_version` 保存 active 授权
+- [x] 新增 `checkVoiceConsent` / `saveVoiceConsent`；两者只接受 subject_id，均由 OPENID 解析当前 user
+- [x] Teacher 必须匹配 active Teacher Subject；Student 必须匹配当前 user 的 active guardian binding
+- [x] Teacher initial / continuous、Student initial / continuous 的实际 `recorderManager.start()` 前均已统一 fail-closed 拦截
+- [x] 未勾选不能提交；点击“不同意”返回且不写授权、不调用麦克风
+- [x] 同一 Guardian 的不同 Student_ID 分别查询和保存，不能共用一条授权
+- [x] `voice_consents` 普通小程序客户端直读返回 `DATABASE_PERMISSION_DENIED (-502003)`
+- [x] 两个授权云函数已部署到 `model-dev-d9gkoyaolb464c28d` 并为 Active
+- [x] Teacher / Student 未授权、不同意、同意、重复进入及按 Student 隔离均已自动化验证
+- [x] 教师与主 TEST Student 真机首次授权及录音放行通过；云端分别生成独立 active 记录
+- [x] 72 个 JavaScript、106 个 JSON、项目配置与开发者工具编译通过；Console / Network 无错误
+- [x] `1.0.10` 已于 2026-09-01 22:22:38 CST 上传，代码包 839819 bytes
+- [ ] 尚未重新提交微信审核
+- [ ] 尚未正式发布
+
+## 真人试采候选版 1.0.10（2026-09-01）
+
+- [x] AppID = `wx962acbf120074da9`
+- [x] 云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] Teacher / Student 首次与持续录音均在麦克风调用前执行独立声纹授权校验
+- [x] 协议复选框默认不勾选；不同意不录音，同意后按 user + Subject 独立保存
+- [x] `voice_consents` 为 ADMINONLY；普通客户端不能直接读取
+- [x] `checkVoiceConsent` / `saveVoiceConsent` 已部署并为 Active
+- [x] 真机预览、Teacher 13/13 / Current Model、Student 17/17 / Current Model 与持续采集入口回归通过
+- [x] 上传时间 = 2026-09-01 22:22:38 CST，代码包 = 839819 bytes
+- [ ] 尚未重新提交微信审核
+- [ ] 尚未正式发布
+
+版本说明：增加独立声纹授权协议及录音前授权确认。
 
 ## 首次模型自动构建与研究者总览（已部署并完成 TEST 云端验证）
 

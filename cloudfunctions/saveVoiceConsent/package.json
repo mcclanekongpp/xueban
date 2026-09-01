@@ -1,0 +1,9 @@
+{
+  "name": "saveVoiceConsent",
+  "version": "1.0.0",
+  "description": "Save authorized per-user and per-subject voice consent",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

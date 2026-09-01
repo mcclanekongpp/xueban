@@ -1,0 +1,43 @@
+<view class="page">
+  <view class="header">
+    <view class="title">《声纹授权协议》</view>
+  </view>
+
+  <view class="agreement-card">
+    <view class="paragraph">为完成教育研究中的语音采集任务，本小程序将在您主动使用录音功能时调用麦克风，采集并保存语音信息。</view>
+
+    <view class="paragraph">所采集语音主要用于：</view>
+    <view class="purpose-list">
+      <view>1. 将语音转换为文字；</view>
+      <view>2. 形成教师或学生的研究数据；</view>
+      <view>3. 用于教师、学生主体模型的构建与完善。</view>
+    </view>
+
+    <view class="paragraph">语音中可能包含能够反映个人声音特征的信息，我们将按照敏感个人信息进行保护。</view>
+
+    <view class="paragraph">本小程序不会将语音用于声纹登录、身份认证、身份识别或声纹比对，也不会用于学生排名。</view>
+
+    <view class="paragraph">学生使用语音采集功能时，由其父母或其他监护人阅读并确认本协议。</view>
+
+    <view class="paragraph paragraph-last">点击“同意并继续”，表示您已阅读并同意上述语音及声纹信息的采集和使用。</view>
+  </view>
+
+  <checkbox-group class="agreement-check" bindchange="onAgreementChange">
+    <label class="check-label">
+      <checkbox value="agreed" checked="{{agreed}}" color="#2f7de1" />
+      <text>我已阅读并同意《声纹授权协议》</text>
+    </label>
+  </checkbox-group>
+
+  <view class="actions">
+    <button class="secondary-button" bindtap="disagree">不同意</button>
+    <button
+      class="primary-button"
+      disabled="{{!agreed || saving}}"
+      loading="{{saving}}"
+      bindtap="agreeAndContinue"
+    >
+      同意并继续
+    </button>
+  </view>
+</view>

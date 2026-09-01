@@ -1,0 +1,9 @@
+{
+  "name": "checkVoiceConsent",
+  "version": "1.0.0",
+  "description": "Check per-user and per-subject voice consent before recording",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

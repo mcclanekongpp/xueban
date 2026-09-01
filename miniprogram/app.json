@@ -11,7 +11,8 @@
     "pages/student-collection/student-collection",
     "pages/student-continuous/student-continuous",
     "pages/student-model/student-model",
-    "pages/research-overview/research-overview"
+    "pages/research-overview/research-overview",
+    "pages/voice-consent/voice-consent"
   ],
   "window": {
     "backgroundColor": "#F6F6F6",

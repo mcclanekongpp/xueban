@@ -16,12 +16,14 @@ const ALLOWED_COLLECTIONS = new Set([
   'teacher_bind_codes',
   'student_bind_codes',
   'guardian_student_bindings',
+  'voice_consents',
   'variable_evidence_profiles',
   'model_change_candidates'
 ])
 
 const ACTIVE_TEACHER_HARDEN_ONLY = new Set([
   'teacher_bind_codes',
+  'voice_consents',
   'variable_evidence_profiles',
   'model_change_candidates'
 ])
@@ -56,7 +58,8 @@ exports.main = async (event = {}) => {
     ![
       'STUDENT_BINDING_MVP_ADMINONLY',
       'SUBJECT_BINDING_MVP_ADMINONLY',
-      'SUBJECT_MODEL_PIPELINE_ADMINONLY'
+      'SUBJECT_MODEL_PIPELINE_ADMINONLY',
+      'VOICE_CONSENT_ADMINONLY'
     ].includes(event.confirmation) ||
     !ALLOWED_COLLECTIONS.has(collectionName)
   ) {

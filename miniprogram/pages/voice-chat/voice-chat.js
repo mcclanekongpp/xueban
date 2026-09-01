@@ -7,6 +7,10 @@ const {
   analyzePendingTeacherInitialEvidence,
   ensureTeacherInitialModel
 } = require('../../utils/initial-model-automation')
+const {
+  checkVoiceConsent,
+  requireVoiceConsent
+} = require('../../utils/voice-consent')
 
 function decodeQueryValue(value) {
   try {
@@ -73,6 +77,12 @@ Page({
     sessionId: '',
 
     sessionReady: false,
+
+    subjectId: '',
+
+    voiceConsentGranted: false,
+
+    checkingVoiceConsent: false,
 
 
     // ==================================================
@@ -297,6 +307,53 @@ Page({
           })
         }
       )
+    },
+
+
+  onShow:
+    async function () {
+
+      if (
+        this.data.subjectId
+      ) {
+        await this.refreshVoiceConsent()
+      }
+    },
+
+
+  refreshVoiceConsent:
+    async function () {
+
+      if (
+        !this.data.subjectId ||
+        this.data.checkingVoiceConsent
+      ) {
+        return false
+      }
+
+      this.setData({
+        checkingVoiceConsent:
+          true
+      })
+
+      const result =
+        await checkVoiceConsent(
+          this.data.subjectId
+        )
+
+      const granted =
+        result.success &&
+        result.hasConsent
+
+      this.setData({
+        checkingVoiceConsent:
+          false,
+
+        voiceConsentGranted:
+          granted
+      })
+
+      return granted
     },
 
 
@@ -621,6 +678,9 @@ Page({
           sessionId:
             session.session_id,
 
+          subjectId:
+            session.subject_id || '',
+
           sessionReady:
             true,
 
@@ -630,6 +690,9 @@ Page({
           canCompleteTask:
             hasExistingResponse
         })
+
+
+        await this.refreshVoiceConsent()
 
 
         console.log(
@@ -709,7 +772,7 @@ Page({
   // ==================================================
 
   startRecording:
-    function () {
+    async function () {
 
       // ==================================================
       // 首次采集已经完成
@@ -752,8 +815,50 @@ Page({
         this.data.isRecording ||
         this.data.isUploading ||
         this.data.isTranscribing ||
-        this.data.isCompletingTask
+        this.data.isCompletingTask ||
+        this.data.checkingVoiceConsent
       ) {
+        return
+      }
+
+
+      // ==================================================
+      // 独立声纹授权：
+      // 未取得当前 user + 当前 Subject 的有效授权时，
+      // 直接进入协议页面，绝不调用 recorderManager.start。
+      // ==================================================
+
+      if (
+        !this.data.voiceConsentGranted
+      ) {
+
+        this.setData({
+          checkingVoiceConsent:
+            true
+        })
+
+        const granted =
+          await requireVoiceConsent(
+            this.data.subjectId
+          )
+
+        this.setData({
+          checkingVoiceConsent:
+            false,
+
+          voiceConsentGranted:
+            granted
+        })
+
+        if (granted) {
+          wx.showToast({
+            title:
+              '授权已确认，请再次按住说话',
+            icon:
+              'none'
+          })
+        }
+
         return
       }
 

@@ -10,7 +10,9 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议已建立，采集页和模型页的信息层级已统一。教师 13/13 与学生 17/17 完成后的首次模型自动分析、构建和激活已部署到 `model-dev-d9gkoyaolb464c28d`，并用隔离 TEST Teacher / Student 验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量和重复调用幂等性；全流程不再设人工审核。证据不足的变量仍保留为“证据不足”，通过构建进度和后续提示显示缺口，不降低 Evidence Analysis 或 supportive 门槛。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链也已部署并完成云端验证。researcher/admin 只读主体构建总览已同步部署；小程序开发候选版 `1.0.9` 已于 2026-08-31 19:07:57 CST 上传，尚未提交审核或正式发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议已建立，采集页和模型页的信息层级已统一。教师 13/13 与学生 17/17 完成后的首次模型自动分析、构建和激活已部署到 `model-dev-d9gkoyaolb464c28d`，并用隔离 TEST Teacher / Student 验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量和重复调用幂等性；全流程不再设人工审核。证据不足的变量仍保留为“证据不足”，通过构建进度和后续提示显示缺口，不降低 Evidence Analysis 或 supportive 门槛。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链也已部署并完成云端验证。researcher/admin 只读主体构建总览已同步部署；独立《声纹授权协议》整改候选版 `1.0.10` 已于 2026-09-01 22:22:38 CST 上传，尚未重新提交审核或正式发布。
+
+微信审核整改新增独立《声纹授权协议》：任何 Teacher / Student 首次或持续录音在真正调用麦克风前，都必须校验当前微信 user 与当前 Subject 的 `voice_consents` V1.0 active 记录。教师授权以本人 Teacher Subject 为边界；学生授权以当前 Guardian user + 单个 Student_ID 为边界，不得跨 Student 共用。授权查询失败、身份关系不成立或未主动同意时一律不调用录音。该授权只处理语音及可能包含的声纹敏感个人信息，不替代线下纸质研究知情同意。
 
 ## 五阶段路线
 1. 主体表征

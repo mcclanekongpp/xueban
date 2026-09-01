@@ -1,0 +1,96 @@
+page {
+  min-height: 100%;
+  background: #f5f7fa;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 56rpx 32rpx 64rpx;
+  box-sizing: border-box;
+}
+
+.header {
+  margin-bottom: 28rpx;
+}
+
+.title {
+  color: #1f2329;
+  font-size: 42rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.agreement-card {
+  padding: 36rpx 32rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 28rpx rgba(31, 35, 41, 0.05);
+}
+
+.paragraph,
+.purpose-list {
+  margin-bottom: 26rpx;
+  color: #353a42;
+  font-size: 28rpx;
+  line-height: 1.85;
+}
+
+.purpose-list {
+  margin-top: -12rpx;
+  padding-left: 8rpx;
+}
+
+.paragraph-last {
+  margin-bottom: 0;
+}
+
+.agreement-check {
+  margin-top: 30rpx;
+  padding: 26rpx 28rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+}
+
+.check-label {
+  display: flex;
+  align-items: flex-start;
+  color: #30343b;
+  font-size: 27rpx;
+  line-height: 1.6;
+}
+
+.check-label checkbox {
+  flex: none;
+  margin: 2rpx 14rpx 0 0;
+  transform: scale(0.9);
+}
+
+.actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 34rpx;
+}
+
+.secondary-button,
+.primary-button {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 18rpx;
+  font-size: 29rpx;
+  line-height: 88rpx;
+}
+
+.secondary-button {
+  color: #4b5563;
+  background: #ffffff;
+}
+
+.primary-button {
+  color: #ffffff;
+  background: #2f7de1;
+}
+
+.primary-button[disabled] {
+  color: #ffffff;
+  background: #a8c8ef;
+}

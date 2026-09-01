@@ -2,7 +2,7 @@
 
 ## 0. 当前实施优先级
 
-教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 验证新 revision 自动激活、旧 snapshot 保留和重复 refresh 幂等。Teacher / Student 首次模型无人工审核的自动构建/激活以及 researcher/admin 只读构建总览已部署；隔离 TEST Teacher / Student 已验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量与重复调用幂等性。小程序开发候选版 `1.0.9` 已上传，尚未提交审核或正式发布。
+教师首次模型、Student Binding、Student Initial Model 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议及持续证据健康 / revision 主链均已完成开发环境回归。持续模型规则驱动自动更新已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 验证新 revision 自动激活、旧 snapshot 保留和重复 refresh 幂等。Teacher / Student 首次模型无人工审核的自动构建/激活以及 researcher/admin 只读构建总览已部署；隔离 TEST Teacher / Student 已验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量与重复调用幂等性。独立《声纹授权协议》整改候选版 `1.0.10` 已上传，尚未重新提交审核或正式发布。
 
 Evidence Profile、Profile 内 Evidence Gap、矛盾状态、Stagnation Diagnosis 和 Model Change Candidate 已接入 Teacher / Student 持续采集后的正式派生链。已部署的自动更新 V1.0 在候选同时满足数量、独立记录、覆盖度和无矛盾规则时执行“AI 证据综合 → 结构校验 → 新 revision snapshot → 自动 active”，不再要求人工点击审批；任何未达门槛或存在 pending contradiction 的变量都只积累证据。Targeted Supplement、Unmatched 聚类和更长期的节奏/回退策略继续暂停。学生第一版仍以语音为主，并允许必要的人工观察记录，不要求图片、视频或自动行为识别。
 
@@ -45,6 +45,23 @@ getMySubjectBindings
 教师绑定写入增强后的 `identity_map`，成功后才将当前 `users.role` 设为 teacher，以兼容既有教师云函数；`ensureTeacherSubject` 只读映射，不再创建主体。既有教师 identity_map 继续兼容。学生绑定仍写 `guardian_student_bindings` 且不修改 `users.role`。后续学生 Voice、Message、Evidence、Evidence Analysis 与 Model Snapshot 一律归属 Student_ID，而不是 Guardian OpenID / user_id。
 
 绑定码明文只在受控预登记调用成功时返回一次，数据库只保存哈希。`teacher_bind_codes` / `student_bind_codes` 状态统一为 unused / used / revoked；错误编号不会消耗 code，同一用户重复提交同一已绑定 Subject 幂等成功，一个 Subject 不允许被不同微信重复绑定。所有绑定相关集合必须保持 ADMINONLY，普通小程序端只能通过云函数访问。
+
+### 0.1.1 独立语音及声纹信息授权 V1.0
+
+线下纸质研究知情同意与小程序内语音敏感个人信息授权是两个不同边界。所有正式录音页在 `recorderManager.start()` 前统一执行：
+
+```text
+点击/按住开始录音
+  → checkVoiceConsent(subject_id)
+  → OPENID 解析当前 users.user_id
+  → Teacher: 校验 identity_map 指向当前 active Teacher Subject
+     Student: 校验 active guardian_student_binding 指向当前 active Student Subject
+  → 查询 user_id + subject_id + consent_version = 1.0 + active
+  ├─ 已授权：允许开始录音
+  └─ 未授权：进入 pages/voice-consent，主动勾选后 saveVoiceConsent
+```
+
+前端不能传 user_id。`voice_consents` 为 ADMINONLY；Student 授权按 Guardian user + 单个 Student_ID 保存，同一 Guardian 的不同孩子必须分别确认。用户未勾选、点击“不同意”、授权查询失败或主体关系校验失败时，录音页保持 fail-closed，不调用麦克风。协议明确语音仅用于 ASR、研究数据与主体模型构建完善，不用于声纹登录、身份认证、身份识别、声纹比对或学生排名。
 
 ## 0.2 Student Initial Model MVP
 

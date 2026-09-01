@@ -5,7 +5,7 @@
 
 原则：身份与研究主体分离；原始记录与研究证据分离；研究证据与主体模型分离；历史模型版本不覆盖；重要集合仅通过云函数访问；Teacher_ID / Student_ID 均不直接使用 OpenID。
 
-规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证。Teacher / Student 首次模型自动分析、构建和 `automatic_initial` 激活也已部署，并由隔离 TEST Teacher / Student 验证固定 13 / 17 变量、Subject 指针和幂等性。小程序开发候选版 `1.0.9` 已上传。`teacher_bind_codes`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
+规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活与重复 refresh 幂等验证。Teacher / Student 首次模型自动分析、构建和 `automatic_initial` 激活也已部署，并由隔离 TEST Teacher / Student 验证固定 13 / 17 变量、Subject 指针和幂等性。独立《声纹授权协议》整改候选版 `1.0.10` 已上传。`teacher_bind_codes`、`voice_consents`、`variable_evidence_profiles`、`model_change_candidates` 均已创建并设置为 ADMINONLY。Teacher / Student Continuous Collection 继续复用 sessions、messages、voice_records、evidence 与 evidence_analysis。全部研究内部集合继续拒绝普通小程序客户端直读；Guardian 仅能通过云函数读取本人 active binding 对应的安全字段，不能读取原始 Evidence、内部 reasoning、任何线下编号/hash 或其他 Student 数据。
 
 ## 1. users
 平台用户身份。用户不等于研究主体。
@@ -55,6 +55,13 @@ status：active / revoked。结构允许一个 user 绑定多个孩子；Student
 
 ## 10. consents
 当前集合保留但 Student Binding MVP 不使用。教师、家长和学生知情同意均在线下以纸质方式完成；小程序不保存电子知情同意，也不把绑定码使用视为知情同意。
+
+## 10A. voice_consents
+独立保存小程序内语音及可能包含的声纹敏感个人信息授权，不替代线下纸质研究知情同意。集合为 ADMINONLY，普通客户端不能直接读写。
+
+V1.0 字段：consent_id、user_id、subject_id、subject_type、consent_version = 1.0、status = active、consented_at、created_at、updated_at。
+
+唯一授权语义为 `user_id + subject_id + consent_version`。教师只能为其 `identity_map` 当前对应的 active Teacher Subject 保存授权；Student 只能由与该 Student_ID 存在 active `guardian_student_bindings` 的当前微信 user 保存授权。同一 Guardian 绑定多个 Student 时，每个 Student_ID 必须独立授权。前端只传 subject_id，user_id 始终由云函数根据 OPENID 解析。未授权、点击不同意、查询失败或主体关系无效时均不得调用麦克风。
 
 ## 11. subject_background
 主体基础背景信息，教师 T0 与学生 S0 共用该集合。
