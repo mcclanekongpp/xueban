@@ -18,6 +18,7 @@ Page({
     isRecording: false,
     isUploading: false,
     isTranscribing: false,
+    asrFailed: false,
     isSubmitting: false,
     lastTranscript: '',
     currentVoiceId: '',
@@ -139,7 +140,8 @@ Page({
         sessionId: sessionResult.session.session_id,
         lastTranscript: restored,
         canSubmit: Boolean(restored),
-        currentVoiceId: ''
+        currentVoiceId: '',
+        asrFailed: false
       })
     } catch (error) {
       console.error('准备学生任务失败：', error)
@@ -173,6 +175,16 @@ Page({
       return
     }
 
+    if (this.data.currentVoiceId) {
+      wx.showToast({
+        title: this.data.asrFailed
+          ? '录音已保存，请先重新识别'
+          : '请先提交当前回答',
+        icon: 'none'
+      })
+      return
+    }
+
     recorderManager.start({
       duration: 60000,
       sampleRate: 16000,
@@ -195,7 +207,13 @@ Page({
       return
     }
 
-    this.setData({ isUploading: true, canSubmit: false })
+    this.setData({
+      isUploading: true,
+      canSubmit: false,
+      asrFailed: false,
+      lastTranscript: '',
+      currentVoiceId: ''
+    })
     wx.showLoading({ title: '正在保存回答' })
 
     try {
@@ -224,27 +242,9 @@ Page({
 
       this.setData({
         isUploading: false,
-        isTranscribing: true,
         currentVoiceId: record.voice_record.voice_id
       })
-      wx.showLoading({ title: '正在整理回答' })
-
-      const asrRes = await wx.cloud.callFunction({
-        name: 'transcribeVoice',
-        data: { voice_id: record.voice_record.voice_id }
-      })
-      const asr = asrRes && asrRes.result ? asrRes.result : null
-
-      if (!asr || asr.success !== true || !String(asr.transcript || '').trim()) {
-        throw new Error((asr && asr.message) || '没有识别到有效回答')
-      }
-
-      this.setData({
-        isTranscribing: false,
-        lastTranscript: String(asr.transcript).trim(),
-        canSubmit: true
-      })
-      wx.showToast({ title: '回答已保存', icon: 'success' })
+      await this.transcribeCurrentVoice()
     } catch (error) {
       console.error('学生录音处理失败：', error)
       this.setData({ isUploading: false, isTranscribing: false })
@@ -252,6 +252,55 @@ Page({
     } finally {
       wx.hideLoading()
     }
+  },
+
+  async transcribeCurrentVoice() {
+    const voiceId = this.data.currentVoiceId
+
+    if (!voiceId || this.data.isTranscribing) return
+
+    this.setData({
+      isTranscribing: true,
+      asrFailed: false,
+      canSubmit: false
+    })
+    wx.showLoading({ title: '正在整理回答' })
+
+    try {
+      const asrRes = await wx.cloud.callFunction({
+        name: 'transcribeVoice',
+        data: { voice_id: voiceId }
+      })
+      const asr = asrRes && asrRes.result ? asrRes.result : null
+      const transcript = String(asr && asr.transcript ? asr.transcript : '').trim()
+
+      if (!asr || asr.success !== true || !transcript) {
+        throw new Error((asr && asr.message) || '没有识别到有效回答')
+      }
+
+      this.setData({
+        isTranscribing: false,
+        asrFailed: false,
+        lastTranscript: transcript,
+        canSubmit: true
+      })
+      wx.showToast({ title: '回答已保存，请确认后提交', icon: 'success' })
+    } catch (error) {
+      console.error('学生语音识别失败：', error)
+      // Voice / Message 已经保存；只标记识别待重试，不清除 currentVoiceId。
+      this.setData({
+        isTranscribing: false,
+        asrFailed: true,
+        canSubmit: false
+      })
+      wx.showToast({ title: '录音已保存，请重新识别', icon: 'none' })
+    } finally {
+      wx.hideLoading()
+    }
+  },
+
+  retryTranscription() {
+    this.transcribeCurrentVoice()
   },
 
   async submitTask() {
@@ -302,7 +351,8 @@ Page({
           currentTask: null,
           taskProgressPercent: 100,
           progress: completed.progress,
-          canSubmit: false
+          canSubmit: false,
+          asrFailed: false
         })
         let modelReady = false
 
@@ -330,7 +380,8 @@ Page({
         sessionId: '',
         lastTranscript: '',
         currentVoiceId: '',
-        canSubmit: false
+        canSubmit: false,
+        asrFailed: false
       })
       await this.prepareTask()
     } catch (error) {

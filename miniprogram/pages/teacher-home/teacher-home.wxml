@@ -246,11 +246,11 @@
 
 
 <!-- ==================================================
-     独立学生采集入口
+     教师帮助同班学生采集
      ================================================== -->
 
 <view class="section-title">
-  学生采集
+  帮学生采集
 </view>
 
 <view
@@ -259,11 +259,11 @@
 >
   <view class="student-entry-content">
     <view class="student-entry-title">
-      进入学生采集
+      帮学生采集
     </view>
 
     <view class="student-entry-desc">
-      使用线下发放的绑定码连接独立 Student Subject
+      输入学生绑定码，或继续已关联学生的首次采集与后续分享
     </view>
   </view>
 

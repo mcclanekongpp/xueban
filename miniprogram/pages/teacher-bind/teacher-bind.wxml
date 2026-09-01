@@ -1,7 +1,7 @@
 <view class="page">
   <view class="header">
     <view class="title">教师绑定</view>
-    <view class="subtitle">请输入研究团队线下发放的信息</view>
+    <view class="subtitle">请输入研究团队线下发放的教师绑定码</view>
   </view>
 
   <view class="form-card">
@@ -16,16 +16,6 @@
       />
     </view>
 
-    <view class="field field-last">
-      <view class="label">教师编号</view>
-      <input
-        class="input"
-        value="{{teacherNo}}"
-        placeholder="请输入教师编号"
-        maxlength="64"
-        bindinput="onTeacherNoInput"
-      />
-    </view>
   </view>
 
   <button
@@ -35,7 +25,7 @@
     disabled="{{submitting || checkingExisting}}"
     bindtap="submitBinding"
   >
-    验证并进入
+    绑定并进入
   </button>
 
   <view class="note">

@@ -192,6 +192,24 @@
 </block>
 
 
+<!-- 原音已落库但文字尚未返回时，不丢弃、不允许覆盖，可直接重试。 -->
+<view
+  wx:if="{{asrFailed && currentVoiceId}}"
+  class="asr-retry-card"
+>
+  <text class="asr-retry-text">
+    刚才的录音已经保存，文字暂未识别成功。请重新识别，成功后再确认提交。
+  </text>
+  <button
+    class="retry-button"
+    disabled="{{isTranscribing}}"
+    bindtap="retryTranscription"
+  >
+    {{isTranscribing ? '正在重新识别…' : '重新识别'}}
+  </button>
+</view>
+
+
 <!-- ================================================= -->
 <!-- 录音区域 -->
 <!-- ================================================= -->
@@ -229,7 +247,7 @@
           ? '正在保存录音'
           : isTranscribing
             ? '正在识别语音'
-            : '请尽量在安静环境中使用'
+            : '单次最多1分钟，达到上限会自动保存'
     }}
   </text>
 
@@ -282,7 +300,7 @@
     wx:if="{{sessionType !== 'initial_interview' && lastTranscript}}"
     class="answer-tip"
   >
-    如果还有需要补充的内容，可以继续录音；确认完整后完成本次记录。
+    请确认上方文字，确认后完成本次记录；如需补充，可提交后再录一段。
   </text>
 
 </view>

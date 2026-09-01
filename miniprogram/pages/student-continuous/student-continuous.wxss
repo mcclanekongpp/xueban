@@ -157,6 +157,14 @@ page {
   font-weight: 500;
 }
 
+.retry-tip {
+  margin-top: 14rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #84652c;
+  text-align: center;
+}
+
 .submit-button {
   background: #e3e6ea;
   color: #9ba0a7;

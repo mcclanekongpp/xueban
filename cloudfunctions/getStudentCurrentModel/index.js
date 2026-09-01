@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 const ALLOWED_STATUSES = ['证据不足', '初步描述', '已有一定支持', '较稳定']
 
 function toUncertaintyList(value) {
@@ -61,50 +62,18 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const userResult = await db.collection('users').where({ openid }).limit(2).get()
+    const authorization = await authorizeStudentOperator({
+      db,
+      openid,
+      subjectId,
+      allowResearcher: true
+    })
 
-    if (userResult.data.length !== 1) {
-      return { success: false, code: 'USER_NOT_FOUND', message: '当前用户不存在' }
-    }
-
-    const user = userResult.data[0]
-    const [bindingResult, subjectResult] = await Promise.all([
-      db.collection('guardian_student_bindings').where({
-        user_id: user.user_id,
-        subject_id: subjectId,
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('subjects').where({
-        subject_id: subjectId,
-        subject_type: 'student',
-        model_framework: 'student_v1.0',
-        status: 'active'
-      }).limit(2).get()
-    ])
-
-    if (subjectResult.data.length !== 1) {
-      return {
-        success: false,
-        code: 'STUDENT_SUBJECT_NOT_ACTIVE',
-        message: '学生研究主体不存在或已失效'
-      }
-    }
-
-    if (bindingResult.data.length > 1) {
-      return {
-        success: false,
-        code: 'DUPLICATE_ACTIVE_STUDENT_BINDINGS',
-        message: '学生采集绑定存在重复，请联系研究人员处理'
-      }
-    }
-
-    const hasActiveBinding = bindingResult.data.length === 1
-    const isResearchOperator = ['researcher', 'admin'].includes(user.role)
-
-    if (!hasActiveBinding && !isResearchOperator) {
+    if (!authorization.authorized) {
       return {
         success: false,
         code: 'STUDENT_MODEL_NOT_AUTHORIZED',
+        detail_code: authorization.code,
         message: '当前微信无权读取该学生的首次建模结果'
       }
     }
@@ -174,7 +143,12 @@ exports.main = async (event = {}) => {
       activated_at: modelStatus === 'active' ? snapshot.activated_at || snapshot.approved_at || null : null,
       created_at: snapshot.created_at || null,
       updated_at: snapshot.updated_at || null,
-      access_scope: hasActiveBinding ? 'bound_student_safe_summary' : 'research_safe_summary'
+      operator_type: authorization.operator_type,
+      access_scope: authorization.operator_type === 'researcher'
+        ? 'research_safe_summary'
+        : authorization.operator_type === 'teacher'
+          ? 'teacher_collector_safe_summary'
+          : 'guardian_bound_student_safe_summary'
     }
   } catch (error) {
     console.error('getStudentCurrentModel error:', error)

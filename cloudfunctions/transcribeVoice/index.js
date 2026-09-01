@@ -11,6 +11,144 @@ const db = cloud.database()
 // 腾讯云 ASR Client
 const AsrClient = tencentcloud.asr.v20190614.Client
 
+const SENTENCE_SAFE_DURATION_MS = 59850
+const MAX_INLINE_AUDIO_BYTES = 3 * 1024 * 1024
+
+function isSentenceDurationLimitError(error) {
+  const message = String(error && error.message ? error.message : error || '')
+    .toLowerCase()
+
+  return (
+    message.includes('audio duration') &&
+    message.includes('longer than 60 seconds')
+  )
+}
+
+function readId3v2Size(buffer) {
+  if (
+    buffer.length < 10 ||
+    buffer[0] !== 0x49 ||
+    buffer[1] !== 0x44 ||
+    buffer[2] !== 0x33
+  ) {
+    return 0
+  }
+
+  return 10 +
+    ((buffer[6] & 0x7f) << 21) +
+    ((buffer[7] & 0x7f) << 14) +
+    ((buffer[8] & 0x7f) << 7) +
+    (buffer[9] & 0x7f)
+}
+
+function parseMp3Frames(buffer) {
+  const mpeg1Bitrates = [
+    0, 32, 40, 48, 56, 64, 80, 96,
+    112, 128, 160, 192, 224, 256, 320, 0
+  ]
+  const mpeg2Bitrates = [
+    0, 8, 16, 24, 32, 40, 48, 56,
+    64, 80, 96, 112, 128, 144, 160, 0
+  ]
+  const sampleRates = {
+    3: [44100, 48000, 32000],
+    2: [22050, 24000, 16000],
+    0: [11025, 12000, 8000]
+  }
+  const frames = []
+  let offset = readId3v2Size(buffer)
+
+  while (offset + 4 <= buffer.length) {
+    const b0 = buffer[offset]
+    const b1 = buffer[offset + 1]
+    const b2 = buffer[offset + 2]
+
+    if (b0 !== 0xff || (b1 & 0xe0) !== 0xe0) {
+      if (frames.length > 0) break
+      offset += 1
+      continue
+    }
+
+    const versionBits = (b1 >> 3) & 0x03
+    const layerBits = (b1 >> 1) & 0x03
+    const bitrateIndex = (b2 >> 4) & 0x0f
+    const sampleRateIndex = (b2 >> 2) & 0x03
+    const padding = (b2 >> 1) & 0x01
+
+    // 微信录音为 MPEG Layer III。versionBits=1、layerBits!=1 或保留采样率
+    // 都不是可安全裁切的有效帧头。
+    if (
+      versionBits === 1 ||
+      layerBits !== 1 ||
+      sampleRateIndex === 3
+    ) {
+      if (frames.length > 0) break
+      offset += 1
+      continue
+    }
+
+    const bitrateTable = versionBits === 3
+      ? mpeg1Bitrates
+      : mpeg2Bitrates
+    const bitrate = bitrateTable[bitrateIndex] * 1000
+    const sampleRate = sampleRates[versionBits][sampleRateIndex]
+
+    if (!bitrate || !sampleRate) break
+
+    const frameLength = Math.floor(
+      (versionBits === 3 ? 144 : 72) * bitrate / sampleRate
+    ) + padding
+    const samplesPerFrame = versionBits === 3 ? 1152 : 576
+
+    if (frameLength <= 4 || offset + frameLength > buffer.length) break
+
+    frames.push({
+      end: offset + frameLength,
+      duration_ms: samplesPerFrame / sampleRate * 1000
+    })
+    offset += frameLength
+  }
+
+  return frames
+}
+
+function createSentenceSafeMp3(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('无法读取已保存的录音文件')
+  }
+
+  if (buffer.length > MAX_INLINE_AUDIO_BYTES) {
+    throw new Error('已保存录音超过语音识别文件大小限制')
+  }
+
+  const frames = parseMp3Frames(buffer)
+
+  if (frames.length === 0) {
+    throw new Error('无法解析已保存录音的 MP3 帧')
+  }
+
+  let keepCount = frames.length
+  let durationMs = frames.reduce(
+    (sum, frame) => sum + frame.duration_ms,
+    0
+  )
+
+  while (keepCount > 1 && durationMs > SENTENCE_SAFE_DURATION_MS) {
+    keepCount -= 1
+    durationMs -= frames[keepCount].duration_ms
+  }
+
+  const trimmed = buffer.subarray(0, frames[keepCount - 1].end)
+
+  return {
+    buffer: trimmed,
+    duration_ms: Math.round(durationMs),
+    original_bytes: buffer.length,
+    trimmed_bytes: buffer.length - trimmed.length,
+    frame_count: keepCount
+  }
+}
+
 // 云函数入口函数
 exports.main = async (event, context) => {
   const startedAt = Date.now()
@@ -188,7 +326,10 @@ exports.main = async (event, context) => {
       }
     })
 
-    // 12. 一句话识别参数
+    // 12. 一句话识别参数。正常短录音继续走低延迟接口；少数录音虽然
+    // 前端报告不足 60 秒，但 MP3 编码后会增加几十毫秒，腾讯一句话
+    // 识别会按真实媒体时长拒绝。此时原始云文件保持不变，识别请求改用
+    // 去掉编码尾部填充帧的内存副本。
     const params = {
       // 我们当前录音设置为 16kHz 中文普通话
       EngSerViceType: '16k_zh',
@@ -212,22 +353,72 @@ exports.main = async (event, context) => {
       source_type: 'cloud_storage_url'
     })
 
-    // 14. 调用腾讯云一句话识别
+    // 14. 调用腾讯云 ASR。微信 MP3 编码会在真实语音尾部附加少量
+    // 编码填充，可能使 59.9 秒录音被识别为 60.0x 秒。若命中该限制，
+    // 原始云文件保持完全不变；这里只下载到内存，按完整 MP3 帧去掉
+    // 尾部填充到安全时长，再使用当前已有权限的一句话识别。
     const asrStartedAt = Date.now()
-    const asrResult = await client.SentenceRecognition(params)
+    let asrMode = 'sentence'
+    let asrRequestId = ''
+    let asrAudioDuration = null
+    let asrTrimmedBytes = 0
+    let asrTrimmedDurationMs = null
+    let transcript = ''
+
+    try {
+      const sentenceResult = await client.SentenceRecognition(params)
+
+      asrRequestId = sentenceResult.RequestId || ''
+      asrAudioDuration = sentenceResult.AudioDuration == null
+        ? null
+        : Number(sentenceResult.AudioDuration)
+      transcript = typeof sentenceResult.Result === 'string'
+        ? sentenceResult.Result.trim()
+        : ''
+    } catch (sentenceError) {
+      if (!isSentenceDurationLimitError(sentenceError)) throw sentenceError
+
+      asrMode = 'sentence_trimmed_copy'
+      console.warn('一句话识别检测到 MP3 编码后超过 60 秒，使用内存安全副本：', {
+        voice_id: voiceId,
+        duration_ms: voiceRecord.duration_ms || null,
+        error: sentenceError.message || String(sentenceError)
+      })
+
+      const downloadResult = await cloud.downloadFile({
+        fileID: voiceRecord.file_id
+      })
+      const safeAudio = createSentenceSafeMp3(downloadResult.fileContent)
+      const trimmedResult = await client.SentenceRecognition({
+        EngSerViceType: '16k_zh',
+        SourceType: 1,
+        VoiceFormat: 'mp3',
+        Data: safeAudio.buffer.toString('base64'),
+        DataLen: safeAudio.buffer.length,
+        WordInfo: 0
+      })
+
+      asrRequestId = trimmedResult.RequestId || ''
+      asrAudioDuration = trimmedResult.AudioDuration == null
+        ? null
+        : Number(trimmedResult.AudioDuration)
+      asrTrimmedBytes = safeAudio.trimmed_bytes
+      asrTrimmedDurationMs = safeAudio.duration_ms
+      transcript = typeof trimmedResult.Result === 'string'
+        ? trimmedResult.Result.trim()
+        : ''
+    }
+
     const asrMs = Date.now() - asrStartedAt
     const totalMs = Date.now() - startedAt
 
     console.log('腾讯云 ASR 返回：', {
       voice_id: voiceId,
-      request_id: asrResult.RequestId,
-      audio_duration: asrResult.AudioDuration
+      mode: asrMode,
+      request_id: asrRequestId,
+      trimmed_bytes: asrTrimmedBytes,
+      audio_duration: asrAudioDuration
     })
-
-    const transcript =
-      typeof asrResult.Result === 'string'
-        ? asrResult.Result.trim()
-        : ''
 
     if (!transcript) {
       throw new Error('语音识别未返回有效文字')
@@ -240,9 +431,14 @@ exports.main = async (event, context) => {
         data: {
           transcript: transcript,
           asr_status: 'success',
-          asr_request_id: asrResult.RequestId || '',
-          asr_audio_duration: asrResult.AudioDuration || null,
-          asr_source_type: 'cloud_storage_url',
+          asr_mode: asrMode,
+          asr_request_id: asrRequestId,
+          asr_audio_duration: asrAudioDuration,
+          asr_trimmed_bytes: asrTrimmedBytes,
+          asr_trimmed_duration_ms: asrTrimmedDurationMs,
+          asr_source_type: asrMode === 'sentence'
+            ? 'cloud_storage_url'
+            : 'inline_trimmed_copy',
           asr_temp_url_ms: tempUrlMs,
           asr_request_ms: asrMs,
           asr_total_ms: totalMs,
@@ -282,9 +478,14 @@ exports.main = async (event, context) => {
 
       asr: {
         status: 'success',
-        request_id: asrResult.RequestId || '',
-        audio_duration: asrResult.AudioDuration || null,
-        source_type: 'cloud_storage_url'
+        mode: asrMode,
+        request_id: asrRequestId,
+        audio_duration: asrAudioDuration,
+        trimmed_bytes: asrTrimmedBytes,
+        trimmed_duration_ms: asrTrimmedDurationMs,
+        source_type: asrMode === 'sentence'
+          ? 'cloud_storage_url'
+          : 'inline_trimmed_copy'
       },
 
       performance_ms: {

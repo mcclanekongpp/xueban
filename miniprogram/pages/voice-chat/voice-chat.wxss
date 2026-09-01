@@ -148,6 +148,37 @@ page {
   line-height: 1.5;
 }
 
+.asr-retry-card {
+  width: 100%;
+  margin: 8rpx 0 12rpx;
+  padding: 24rpx 26rpx;
+  box-sizing: border-box;
+  border-radius: 18rpx;
+  background: #fff4df;
+}
+
+.asr-retry-text {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: #745b2b;
+}
+
+.retry-button {
+  width: 100%;
+  min-height: 80rpx;
+  margin-top: 20rpx;
+  border-radius: 16rpx;
+  background: #f2d596;
+  color: #5f481d;
+  font-size: 27rpx;
+  font-weight: 500;
+}
+
+.retry-button::after {
+  border: 0;
+}
+
 
 /* =========================
    录音区域

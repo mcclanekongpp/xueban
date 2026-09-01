@@ -1,5 +1,6 @@
 const cloud = require('wx-server-sdk')
 const tcb = require('@cloudbase/node-sdk')
+const { authorizeStudentOperator, operatorFields } = require('./student-operator-auth')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -209,19 +210,12 @@ exports.main = async (event = {}) => {
       return { success: false, code: 'ASR_NOT_READY', message: '当前录音尚未完成语音识别' }
     }
 
-    const [bindingResult, subjectResult, sessionResult] = await Promise.all([
-      db.collection('guardian_student_bindings').where({
-        user_id: user.user_id,
-        subject_id: subjectId,
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('subjects').where({
-        subject_id: subjectId,
-        subject_type: 'student',
-        model_framework: 'student_v1.0',
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('sessions').where({
+    const authorization = await authorizeStudentOperator({ db, openid, subjectId })
+    if (!authorization.authorized) {
+      return { success: false, code: authorization.code, message: authorization.message }
+    }
+
+    const sessionResult = await db.collection('sessions').where({
         session_id: voice.session_id,
         user_id: user.user_id,
         subject_id: subjectId,
@@ -230,15 +224,6 @@ exports.main = async (event = {}) => {
         session_type: 'student_continuous_record',
         collection_phase: 'continuous'
       }).limit(2).get()
-    ])
-
-    if (bindingResult.data.length !== 1) {
-      return { success: false, code: 'STUDENT_BINDING_NOT_ACTIVE', message: '当前微信没有该学生的有效采集绑定' }
-    }
-
-    if (subjectResult.data.length !== 1) {
-      return { success: false, code: 'STUDENT_SUBJECT_NOT_ACTIVE', message: '学生研究主体不存在或已失效' }
-    }
 
     if (sessionResult.data.length !== 1) {
       return { success: false, code: 'STUDENT_CONTINUOUS_SESSION_NOT_FOUND', message: '未找到对应的学生持续采集会话' }
@@ -316,7 +301,7 @@ exports.main = async (event = {}) => {
 
     const routing = validation.routing
     const continuousRecordId = `SCR_${voiceId.replace(/^V_/, '')}`
-    const isTest = subjectResult.data[0].is_test === true
+    const isTest = authorization.subject.is_test === true
     const createdEvidence = []
 
     for (const match of routing.matches) {
@@ -345,7 +330,7 @@ exports.main = async (event = {}) => {
         message_id: voice.message_id,
         voice_id: voiceId,
         file_id: voice.file_id || '',
-        operator_user_id: user.user_id,
+        ...operatorFields(authorization),
         raw_text: rawText,
         transcript: rawText,
         duration_ms: typeof voice.duration_ms === 'number' ? voice.duration_ms : null,

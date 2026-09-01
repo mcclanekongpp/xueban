@@ -1,6 +1,7 @@
 const cloud = require('wx-server-sdk')
 const tcb = require('@cloudbase/node-sdk')
 const createContinuousRouter = require('./continuous-routing')
+const { authorizeStudentOperator, operatorFields } = require('./student-operator-auth')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -264,34 +265,14 @@ async function analyzePendingInitialEvidence(openid, subjectId) {
     }
   }
 
-  const userResult = await db.collection('users').where({ openid }).limit(2).get()
-  if (userResult.data.length !== 1) {
-    return { success: false, code: 'USER_NOT_FOUND', message: '当前用户不存在' }
-  }
-
-  const user = userResult.data[0]
-  const [bindingResult, subjectResult] = await Promise.all([
-    db.collection('guardian_student_bindings').where({
-      user_id: user.user_id,
-      subject_id: subjectId,
-      status: 'active'
-    }).limit(2).get(),
-    db.collection('subjects').where({
-      subject_id: subjectId,
-      subject_type: 'student',
-      model_framework: 'student_v1.0',
-      status: 'active'
-    }).limit(2).get()
-  ])
-
-  if (subjectResult.data.length !== 1) {
-    return { success: false, code: 'STUDENT_SUBJECT_NOT_ACTIVE', message: '学生研究主体不存在或已失效' }
-  }
-  if (bindingResult.data.length > 1) {
-    return { success: false, code: 'DUPLICATE_ACTIVE_STUDENT_BINDINGS', message: '学生采集绑定存在重复' }
-  }
-  if (bindingResult.data.length !== 1 && !['researcher', 'admin'].includes(user.role)) {
-    return { success: false, code: 'STUDENT_BINDING_NOT_ACTIVE', message: '当前微信没有该学生的有效采集绑定' }
+  const authorization = await authorizeStudentOperator({
+    db,
+    openid,
+    subjectId,
+    allowResearcher: true
+  })
+  if (!authorization.authorized) {
+    return { success: false, code: authorization.code, message: authorization.message }
   }
 
   const [evidenceResult, analysisResult] = await Promise.all([
@@ -439,13 +420,6 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const userResult = await db.collection('users').where({ openid }).limit(2).get()
-
-    if (userResult.data.length !== 1) {
-      return { success: false, code: 'USER_NOT_FOUND', message: '当前用户不存在' }
-    }
-
-    const user = userResult.data[0]
     const evidenceResult = await db.collection('evidence').where({
       evidence_id: evidenceId,
       subject_type: 'student',
@@ -462,25 +436,18 @@ exports.main = async (event = {}) => {
     }
 
     const evidence = evidenceResult.data[0]
-    const bindingResult = await db.collection('guardian_student_bindings').where({
-      user_id: user.user_id,
-      subject_id: evidence.subject_id,
-      status: 'active'
-    }).limit(2).get()
+    const authorization = await authorizeStudentOperator({
+      db,
+      openid,
+      subjectId: evidence.subject_id,
+      allowResearcher: true
+    })
 
-    if (bindingResult.data.length > 1) {
+    if (!authorization.authorized) {
       return {
         success: false,
-        code: 'DUPLICATE_ACTIVE_STUDENT_BINDINGS',
-        message: '学生采集绑定存在重复'
-      }
-    }
-
-    if (bindingResult.data.length !== 1 && !['researcher', 'admin'].includes(user.role)) {
-      return {
-        success: false,
-        code: 'STUDENT_BINDING_NOT_ACTIVE',
-        message: '当前微信没有该学生的有效采集绑定'
+        code: authorization.code,
+        message: authorization.message
       }
     }
 
@@ -631,6 +598,7 @@ exports.main = async (event = {}) => {
       evidence_type: evidence.evidence_type || 'voice_response',
       task_id: evidence.task_id || '',
       task_order: typeof evidence.task_order === 'number' ? evidence.task_order : null,
+      ...operatorFields(authorization),
       ...validation.analysis,
       analysis_method: 'student_evidence_analysis',
       analysis_version: '1.0',

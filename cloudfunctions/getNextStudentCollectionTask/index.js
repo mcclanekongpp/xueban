@@ -1,14 +1,19 @@
 const cloud = require('wx-server-sdk')
+const crypto = require('crypto')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
-function makeId(prefix) {
-  return `${prefix}_${Date.now().toString(36).toUpperCase()}_${Math.random()
-    .toString(36)
-    .slice(2, 7)
-    .toUpperCase()}`
+function makeProgressId(subjectId) {
+  const digest = crypto
+    .createHash('sha256')
+    .update(`${subjectId}|student_v1.0|initial`, 'utf8')
+    .digest('hex')
+    .slice(0, 24)
+    .toUpperCase()
+  return `CP_STUDENT_${digest}`
 }
 
 exports.main = async (event = {}) => {
@@ -26,52 +31,17 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const userResult = await db
-      .collection('users')
-      .where({ openid, status: 'active' })
-      .limit(2)
-      .get()
-
-    if (userResult.data.length !== 1) {
-      return { success: false, code: 'USER_NOT_ACTIVE', message: '当前用户不可用' }
+    const authorization = await authorizeStudentOperator({ db, openid, subjectId })
+    if (!authorization.authorized) {
+      return { success: false, code: authorization.code, message: authorization.message }
     }
 
-    const user = userResult.data[0]
-    const [bindingResult, subjectResult, taskResult] = await Promise.all([
-      db.collection('guardian_student_bindings').where({
-        user_id: user.user_id,
-        subject_id: subjectId,
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('subjects').where({
-        subject_id: subjectId,
-        subject_type: 'student',
-        model_framework: 'student_v1.0',
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('collection_tasks').where({
+    const taskResult = await db.collection('collection_tasks').where({
         subject_type: 'student',
         framework: 'student_v1.0',
         collection_phase: 'initial',
         status: 'active'
       }).orderBy('task_order', 'asc').limit(100).get()
-    ])
-
-    if (bindingResult.data.length !== 1) {
-      return {
-        success: false,
-        code: 'STUDENT_BINDING_NOT_ACTIVE',
-        message: '当前微信没有该学生的有效采集绑定'
-      }
-    }
-
-    if (subjectResult.data.length !== 1) {
-      return {
-        success: false,
-        code: 'STUDENT_SUBJECT_NOT_ACTIVE',
-        message: '学生研究主体不存在或已失效'
-      }
-    }
 
     const tasks = taskResult.data
 
@@ -120,7 +90,9 @@ exports.main = async (event = {}) => {
     let progress = progressResult.data[0]
 
     if (!progress) {
-      const progressId = makeId('CP')
+      // 固定文档 ID 使 Guardian / Teacher 首次同时进入时落到同一条 Progress。
+      // 两个初始化写入的数据完全相同，后续任务仍由事务推进并按 task_id 去重。
+      const progressId = makeProgressId(subjectId)
       const now = db.serverDate()
       progress = {
         progress_id: progressId,
@@ -135,17 +107,27 @@ exports.main = async (event = {}) => {
         current_task_id: tasks[0].task_id,
         current_order: 1,
         status: 'in_progress',
-        is_test: subjectResult.data[0].is_test === true,
+        is_test: authorization.subject.is_test === true,
+        initialized_by_operator_user_id: authorization.operator_user_id,
+        initialized_by_operator_type: authorization.operator_type,
+        initialized_by_teacher_subject_id: authorization.operator_teacher_subject_id || '',
         started_at: now,
         completed_at: null,
         created_at: now,
         updated_at: now
       }
-      const addResult = await db.collection('collection_progress').add({ data: progress })
-      progress._id = addResult._id
+      await db.collection('collection_progress').doc(progressId).set({ data: progress })
+      progress._id = progressId
     } else if (start && progress.status === 'not_started') {
       await db.collection('collection_progress').doc(progress._id).update({
-        data: { status: 'in_progress', started_at: db.serverDate(), updated_at: db.serverDate() }
+        data: {
+          status: 'in_progress',
+          started_at: db.serverDate(),
+          last_operator_user_id: authorization.operator_user_id,
+          last_operator_type: authorization.operator_type,
+          last_operator_teacher_subject_id: authorization.operator_teacher_subject_id || '',
+          updated_at: db.serverDate()
+        }
       })
       progress.status = 'in_progress'
     }

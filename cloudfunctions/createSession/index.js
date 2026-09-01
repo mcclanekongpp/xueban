@@ -5,6 +5,7 @@ cloud.init({
 })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
 
 // ==================================================
@@ -210,6 +211,8 @@ exports.main =
     let subjectId = ''
     let subjectType = requestedSubjectType
     let framework = ''
+    let operatorType = 'teacher'
+    let operatorTeacherSubjectId = ''
 
     if (requestedSubjectType === 'student') {
       const requestedSubjectId =
@@ -225,45 +228,24 @@ exports.main =
         }
       }
 
-      const bindingResult = await db
-        .collection('guardian_student_bindings')
-        .where({
-          user_id: user.user_id,
-          subject_id: requestedSubjectId,
-          status: 'active'
-        })
-        .limit(2)
-        .get()
+      const authorization = await authorizeStudentOperator({
+        db,
+        openid,
+        subjectId: requestedSubjectId
+      })
 
-      if (bindingResult.data.length !== 1) {
+      if (!authorization.authorized) {
         return {
           success: false,
-          code: 'STUDENT_BINDING_NOT_ACTIVE',
-          message: '当前微信没有该学生的有效采集绑定'
-        }
-      }
-
-      const subjectResult = await db
-        .collection('subjects')
-        .where({
-          subject_id: requestedSubjectId,
-          subject_type: 'student',
-          model_framework: 'student_v1.0',
-          status: 'active'
-        })
-        .limit(2)
-        .get()
-
-      if (subjectResult.data.length !== 1) {
-        return {
-          success: false,
-          code: 'STUDENT_SUBJECT_NOT_ACTIVE',
-          message: '学生研究主体不存在或已失效'
+          code: authorization.code,
+          message: authorization.message
         }
       }
 
       subjectId = requestedSubjectId
       framework = 'student_v1.0'
+      operatorType = authorization.operator_type
+      operatorTeacherSubjectId = authorization.operator_teacher_subject_id || ''
     } else {
       if (user.role !== 'teacher') {
         return {
@@ -293,6 +275,8 @@ exports.main =
       subjectId = mapResult.data[0].subject_id
       subjectType = 'teacher'
       framework = 'teacher_v1.0'
+      operatorType = 'teacher'
+      operatorTeacherSubjectId = subjectId
     }
 
 
@@ -532,11 +516,10 @@ exports.main =
         status: 'active'
       }
 
-      // 历史教师 session 可能没有 subject_type；学生 session 必须同时
-      // 匹配 subject_type 与当前 operator，避免恢复旧操作者的会话。
+      // Student initial session 由 Student + task 唯一共享，不按 operator
+      // 拆分；Guardian 与合法 Teacher Collector 都从同一进度继续。
       if (subjectType === 'student') {
         existingWhere.subject_type = 'student'
-        existingWhere.user_id = user.user_id
       }
 
       const existingResult =
@@ -567,6 +550,17 @@ exports.main =
           await recoverSessionTranscripts(
             session.session_id
           )
+
+        if (subjectType === 'student') {
+          await db.collection('sessions').doc(session._id).update({
+            data: {
+              last_operator_user_id: user.user_id,
+              last_operator_type: operatorType,
+              last_operator_teacher_subject_id: operatorTeacherSubjectId,
+              updated_at: db.serverDate()
+            }
+          })
+        }
 
 
         return {
@@ -637,6 +631,12 @@ exports.main =
 
         operator_user_id:
           user.user_id,
+
+        operator_type:
+          operatorType,
+
+        operator_teacher_subject_id:
+          operatorTeacherSubjectId,
 
         task_id:
           task.task_id,
@@ -807,6 +807,12 @@ exports.main =
 
       operator_user_id:
         user.user_id,
+
+      operator_type:
+        operatorType,
+
+      operator_teacher_subject_id:
+        operatorTeacherSubjectId,
 
       // 持续记录阶段不预先指定变量
       target_dimension:

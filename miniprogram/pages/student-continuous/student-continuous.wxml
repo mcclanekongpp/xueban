@@ -35,7 +35,7 @@
         <view class="voice-text">{{isRecording ? '正在听你说' : '按住说话'}}</view>
       </view>
       <view class="voice-tip">
-        {{isRecording ? '松开结束录音' : isSubmitting ? '正在分析并提交' : isUploading ? '正在保存录音' : isTranscribing ? '正在识别语音' : '请尽量在安静环境中使用'}}
+        {{isRecording ? '松开结束录音' : isSubmitting ? '正在分析并提交' : isUploading ? '正在保存录音' : isTranscribing ? '正在识别语音' : '单次最多1分钟，达到上限会自动保存'}}
       </view>
     </view>
 
@@ -47,6 +47,10 @@
     >
       再试一次识别
     </button>
+
+    <view wx:if="{{asrFailed}}" class="retry-tip">
+      原始录音已经保存，不会丢失；识别成功后再确认提交。
+    </view>
 
     <button
       class="submit-button {{canSubmit ? 'ready' : ''}}"

@@ -10,9 +10,9 @@
 
 当前工作重点位于五阶段路线的**阶段1：主体表征**。
 
-教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 统一绑定协议已建立，采集页和模型页的信息层级已统一。教师 13/13 与学生 17/17 完成后的首次模型自动分析、构建和激活已部署到 `model-dev-d9gkoyaolb464c28d`，并用隔离 TEST Teacher / Student 验证 `automatic_initial`、Subject 当前指针、固定 13 / 17 变量和重复调用幂等性；全流程不再设人工审核。证据不足的变量仍保留为“证据不足”，通过构建进度和后续提示显示缺口，不降低 Evidence Analysis 或 supportive 门槛。持续证据健康、Model Change Candidate 与规则驱动自动 revision 主链也已部署并完成云端验证。researcher/admin 只读主体构建总览已同步部署；独立《声纹授权协议》整改候选版 `1.0.10` 已于 2026-09-01 22:22:38 CST 上传，尚未重新提交审核或正式发布。
+教师首次模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。Teacher / Student 单 Bind Code 以及 Guardian + 同班 Teacher 共同操作同一 Student_ID 的机制已部署并通过隔离 TEST 云端验收；Student 全链统一使用 `authorizeStudentOperator`，共享一份 Progress、Evidence 池和 Model 版本链。首次模型自动激活、构建进度/提示、持续证据健康与规则驱动 revision 保持不变。独立《声纹授权协议》、近 60 秒 ASR 恢复、单绑定码联合采集及 Student Progress 并发冲突重试已经进入微信开发候选版 `1.0.11`；该版本已上传，尚未提交审核或正式发布。
 
-微信审核整改新增独立《声纹授权协议》：任何 Teacher / Student 首次或持续录音在真正调用麦克风前，都必须校验当前微信 user 与当前 Subject 的 `voice_consents` V1.0 active 记录。教师授权以本人 Teacher Subject 为边界；学生授权以当前 Guardian user + 单个 Student_ID 为边界，不得跨 Student 共用。授权查询失败、身份关系不成立或未主动同意时一律不调用录音。该授权只处理语音及可能包含的声纹敏感个人信息，不替代线下纸质研究知情同意。
+微信审核整改新增独立《声纹授权协议》：任何 Teacher / Student 首次或持续录音在真正调用麦克风前，都必须校验当前微信 user 与当前 Subject 的 `voice_consents` V1.0 active 记录。教师本人授权以其 Teacher Subject 为边界；Student 授权以当前合法 operator user + 单个 Student_ID 为边界，Guardian 与 Teacher Collector 均不得绕过或跨 Student 共用。授权查询失败、身份关系不成立或未主动同意时一律不调用录音。该授权只处理语音及可能包含的声纹敏感个人信息，不替代线下纸质研究知情同意。
 
 ## 五阶段路线
 1. 主体表征
@@ -133,17 +133,19 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 ## 学生采集原则
 学生首次建模：儿童自然访谈 + 行为观察 + 监护人补充。禁止把低年级儿童采集做成长问卷、长书写任务。监护人信息是独立证据来源，不是儿童回答的“标准答案”。
 
-## Teacher / Student Subject Binding V1.0
+## Teacher / Student Subject Binding V1.1
 - 教师、家长与学生知情同意均在线下以纸质方式完成；小程序不提供电子知情同意页面，也不把绑定行为解释为知情同意。
-- 研究团队在线下准备阶段登记 School / Class / Teacher Subject / Student Subject，并为每个待绑定 Subject 预生成随机一次性绑定码。School_ID / Class_ID 是组织编码，不是微信登录主体或单独登录凭据。
-- 教师绑定提交 `bind_code + teacher_no`；学生家长绑定提交 `bind_code + student_no`。线下编号按 `school_id` 范围标准化并哈希，绑定码单独标准化并哈希；二者必须指向同一 Subject。
+- 研究团队在线下准备阶段登记 School / Class / Teacher Subject / Student Subject，并为每个 Subject 只生成一个高熵随机 Bind Code。School_ID / Class_ID 是组织编码，不是微信登录主体或单独登录凭据。
+- 新流程不再使用 `teacher_no`、`student_no` 或对应 hash。Teacher Bind Code 是唯一指向 Teacher Subject 的本人绑定凭据；Student Bind Code 是唯一指向 Student Subject、可由合法 Guardian 与同班 Teacher Collector 使用的共享采集凭据。
 - 正式前端统一调用 `bindSubjectByCode` 与 `getMySubjectBindings`。`registerTeacherForStudy` / `registerStudentForStudy` 负责受控预登记；旧 `bindStudentByCode` / `getMyStudentBindings` 仅作历史兼容。
 - 新教师只有绑定成功后才建立 `identity_map` 并把当前 `users.role` 设为 teacher；`ensureTeacherSubject` 只读取既有映射，不再创建 Teacher Subject。既有教师映射继续兼容，不重新绑定、不重复建主体。
 - 学生主体使用独立 Student_ID：`subject_type = student`、`model_framework = student_v1.0`。Student_ID 不等于 OpenID、user_id、学号或绑定码。
 - 学校与班级关系使用 `schools`、`classes`、`class_memberships`；教师与学生均通过 Class_ID 建立组织关系，不创建 teacher_student_direct_relation。
-- Guardian WeChat 只是认证后的采集终端操作者。`guardian_student_bindings` 连接 `users.user_id` 与 Student_ID，但不得修改 `users.role`；后续学生 Voice / Message / Evidence / Model Snapshot 必须归属 Student_ID。
-- `teacher_bind_codes`、`student_bind_codes` 均只保存哈希，不保存明文绑定码或线下编号。绑定成功后事务写入绑定关系并把 code 置为 used；支持 revoked，拒绝跨用户重复绑定。
-- `schools`、`classes`、`class_memberships`、`teacher_bind_codes`、`student_bind_codes`、`guardian_student_bindings` 与 `identity_map` 均不得允许普通前端任意读写。
+- Guardian WeChat 只是认证后的采集终端操作者，使用 `guardian_student_bindings`；Teacher 在完成自己的 Teacher Binding 后，可用 Student Bind Code 建立 `teacher_student_collection_access`，但必须与 Student 保持至少一个 active Class 关系。Teacher 自己是否 13/13、是否已有模型都不是前置条件。
+- Student Code 的整体 `status` 为 active / revoked / expired，角色使用进度以 `usage_state = unused / guardian_only / teacher_only / guardian_and_teacher` 单独记录。一个 Student 仍只允许一个 active Guardian；多个同班 Teacher 可各有一条 active collector access，重复使用同一码必须幂等。
+- 学生正式云函数统一调用 `authorizeStudentOperator`，只接受 active Guardian 或 active Teacher Collector。所有 Student Progress / Session / Voice / Message / Evidence / Analysis / Profile / Candidate / Snapshot 均归同一个 Student_ID；操作者仅通过 `operator_user_id`、`operator_type` 和可选 `operator_teacher_subject_id` 追溯。
+- `teacher_bind_codes`、`student_bind_codes` 均只保存 hash，不保存明文。历史 `teacher_no_hash` / `student_no_hash` 字段暂时兼容保留但不再读取、生成或验证。
+- `schools`、`classes`、`class_memberships`、`teacher_bind_codes`、`student_bind_codes`、`guardian_student_bindings`、`teacher_student_collection_access` 与 `identity_map` 均不得允许普通前端任意读写。
 - 正式入口分别为“教师采集”和“学生采集”：已有绑定进入对应 Home，否则进入对应 Bind；不把 Student 设计为当前微信账户角色。
 
 ## Student Initial Model MVP
@@ -154,14 +156,14 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - Student Evidence Analysis V1.0 使用 `relevance_status`、`evidence_sufficiency`、`extracted_points`、`reasoning_basis`、`context`、`uncertainty`，不做心理诊断、排名、总分或固定人格判断。
 - `buildStudentInitialModel` 使用 `student_initial_model_v1.2` 对全部 supportive Evidence Analysis 做 AI 证据综合，固定保留 S1—S6 和 17 变量；禁止直接拼接 extracted_points，不足变量仍保留为“证据不足”。新 Student-M0 含 100 字以内、覆盖 S1—S6 的 `overview_summary`，不使用分数、排名或诊断表达。
 - 17/17 完成后，页面自动补齐待分析 Evidence，然后幂等调用 `buildStudentInitialModel`；新 snapshot 以 `activation_mode = automatic_initial` 自动 active，并事务更新 Subject 当前版本指针。`approveStudentInitialModel` 只作历史兼容，不再提供人工审批写入。
-- `getStudentCurrentModel` 只向 active Guardian 或 researcher / admin 返回安全摘要；Student Home 在 17/17 后提供“查看首次建模结果”，`student-model` 显示 active 状态及 S1—S6、17 变量的当前描述和不确定性，不返回原始 Evidence、内部 reasoning、分数、排名或诊断。
+- `getStudentCurrentModel` 只向 active Guardian、合法 Teacher Collector 或 researcher / admin 返回安全摘要；Student Home 在 17/17 后提供“查看首次建模结果”，`student-model` 显示 active 状态及 S1—S6、17 变量的当前描述和不确定性，不返回原始 Evidence、内部 reasoning、分数、排名或诊断。
 - TEST Student 历史上已完成 17/17、draft、人工审批、active 与当前模型展示全链路；新规则改为首次模型自动激活，历史审批字段仅作存量数据兼容。
 
 ## Student Continuous Collection V1.0
 - 首次采集 17/17 后，Student Home 提供儿童友好的“再说一说”入口，不显示变量编号、Evidence 或模型更新术语。
 - 每次录音独立提交：Student continuous Session → Voice → ASR → Message → 内容路由 → 0—5 条 Student Evidence → 每条 Evidence 使用 Student Evidence Analysis V1.0 独立分析。
-- 正式页面通过 `analyzeStudentEvidence(action = route_continuous)` 完成路由，再以 `action = analyze_batch` 并发处理最多 5 条独立 Analysis；所有调用都校验当前 user 对目标 Student_ID 的 active Guardian binding。
-- Voice、Message、Evidence 与 Evidence Analysis 的 `subject_id` 始终是 Student_ID；Guardian user 只记录为 `operator_user_id`。
+- 正式页面通过 `analyzeStudentEvidence(action = route_continuous)` 完成路由，再以 `action = analyze_batch` 并发处理最多 5 条独立 Analysis；所有调用都通过 `authorizeStudentOperator` 校验当前 user 是该 Student 的 active Guardian 或合法同班 Teacher Collector。
+- Voice、Message、Evidence 与 Evidence Analysis 的 `subject_id` 始终是 Student_ID；Guardian / Teacher 只记录为 operator，Teacher 操作可追溯到 `operator_teacher_subject_id`。
 - `matches = []` 时不制造 Evidence，Voice、Message 与 `continuous_record_id` 仍保存；路由或分析失败时前端保留当前 voice_id 和 transcript，允许重试。
 - Student Continuous Evidence 不直接原地修改 active Student-M0；Analysis 完成后异步刷新 Profile / Gap / Contradiction / Stagnation / Model Change Candidate。达到统一自动门槛后，系统创建 Student-M1/M2 revision snapshot 并自动激活；未达门槛或有矛盾时保持当前 active 不变。
 - Student Home 的后续提示由 `getSubjectModelGuidance` 根据 supportive Evidence 的数量、充分性、情境与时间覆盖动态排序；提示问题不绑定变量，`analyzeStudentEvidence(action = route_continuous)` 仍按实际语音内容返回 0—5 个变量，允许 0 匹配。
@@ -169,8 +171,9 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 
 ## 语音处理性能 V1.1
 - `transcribeVoice` 使用云存储临时签名 URL 调用腾讯一句话识别，不再由云函数下载完整 MP3、转 Base64 后再上传给 ASR；临时 URL 不写日志、不返回前端。
-- Voice 成功转写继续幂等复用，失败仍保留原始云文件与 Voice 记录。
-- `voice_records` 记录 `asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms` 和 `asr_source_type = cloud_storage_url`，用于区分临时 URL、ASR 和整体耗时。
+- 微信端仍允许单次完整录音到 60 秒。若 MP3 编码填充使媒体时长变为 60.0x 秒，原始云文件保持不变；云函数只在内存中按完整 MP3 帧去掉尾部填充到 59.85 秒以内，再调用同一 ASR，记录 `asr_mode = sentence_trimmed_copy` 与裁切字节数。
+- Voice 成功转写继续幂等复用；失败仍保留原始云文件、Voice 和 Message。教师首次/持续、学生首次/持续页面都保留 `currentVoiceId`，显示重试入口，转写成功后才允许用户确认提交，待重试录音不得被下一条录音覆盖。
+- `voice_records` 记录 `asr_temp_url_ms`、`asr_request_ms`、`asr_total_ms`、`asr_mode` 和 `asr_source_type`，用于区分临时 URL、ASR、60 秒兼容副本和整体耗时。
 - 持续记录命中多个变量时使用批量并发 Analysis；证据健康层异步刷新且使用精简回包，不再增加用户等待时间。AI 路由和首次冷启动仍可能产生数秒等待，不能以降低证据门槛换取速度。
 
 ## 真人试采版本边界
@@ -180,7 +183,7 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 - 普通 Guardian 只能访问本人 active binding 对应的采集状态、安全字段和 Student-M0 安全摘要，不能直接读取研究集合、原始 Evidence、内部 reasoning、哈希身份字段或完整内部 snapshot。
 - 教师首页正式持续采集入口只保留教学反思和学生观察记录；`free_dialogue` 仅作为历史数据/旧链接兼容类型保留在底层，不再作为正式首页入口。重复的泛化“语音记录”与未开发的“我的记录”同样不进入正式信息架构。
 - 教师/学生逐项采集页面统一进度、任务卡、录音、提交和状态反馈层级；模型页面统一采用“100 字内总体概览 → 一级维度构建进度雷达图 → 具体变量信息”，再展示版本、状态、当前描述和可选不确定性。构建百分比只用于发现覆盖空白，不作为主体评价。
-- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.9` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
+- 规则驱动持续 revision 已部署并完成 TEST Student 云端自动激活：新 snapshot 使用 `activation_mode = automatic_rule`，旧 snapshot 保留为 `superseded`。小程序开发候选版 `1.0.11` 已上传；微信公众平台隐私保护指引确认、提交审核和正式发布仍需管理员完成。
 
 ## 数据与隐私原则
 1. 身份信息与研究主体信息分离。
@@ -209,12 +212,12 @@ Evidence 必须保持模态无关：某条原始记录或某个真实采集事�
 5. 主体刻画综合协议、后续补充对话提醒与模型构建进度（已完成并进入 `1.0.6`）
 6. Teacher / Student 统一绑定协议（集合、主要函数、页面与安全回归已完成并进入 `1.0.6`）
 7. 真人试采候选版本 `1.0.7` 上传（已完成，已被后续候选版替代）
-8. 微信平台隐私核对、审核与发布
-9. 组织真人教师和学生主体模型采集测试
-10. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
-11. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
-12. 规则驱动持续模型自动更新（已部署，已用 TEST Student 完成云端自动激活与幂等验证）
-13. 小程序开发候选版 `1.0.9` 上传（已完成）
+8. Evidence Profile、Evidence Gap、矛盾/停滞诊断与半自动模型 revision 主链（已完成并进入 `1.0.7`）
+9. 规则驱动持续模型自动更新（已部署，已用 TEST Student 完成云端自动激活与幂等验证）
+10. 小程序开发候选版 `1.0.11` 上传与 TEST 并发验收（已完成）
+11. 微信平台隐私核对、提交 `1.0.11` 审核并发布
+12. 组织真人小样本采集，按当前安全并发线逐步扩容
+13. 依据真实教师 / 儿童数据修复阻断问题并优化首次采集任务
 14. 主体复现
 15. 双主体互动
 16. 模拟课堂

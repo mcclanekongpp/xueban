@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
 const TEACHER_VARIABLES = [
   ['T1', '课程与学习目标取向', 'T1-1', '课程与学习价值理解', '可以回想一节你觉得“值得这样教”的课：你最希望学生真正带走什么？为什么？', 'teaching_reflection'],
@@ -500,7 +501,10 @@ async function buildResearchOverview(event, user) {
 
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
-  const requestedType = event.subject_type === 'student' ? 'student' : 'teacher'
+  const requestedType = (
+    event.subject_type === 'student' ||
+    event.framework === 'student_v1.0'
+  ) ? 'student' : 'teacher'
 
   if (!openid) {
     return { success: false, code: 'NO_OPENID', message: '未获取到微信用户标识' }
@@ -539,21 +543,13 @@ exports.main = async (event = {}) => {
       if (!subjectId) {
         return { success: false, code: 'STUDENT_SUBJECT_ID_REQUIRED', message: '缺少学生研究主体编号' }
       }
-      const [bindingResult, subjectResult] = await Promise.all([
-        db.collection('guardian_student_bindings').where({
-          user_id: user.user_id,
-          subject_id: subjectId,
-          status: 'active'
-        }).limit(2).get(),
-        db.collection('subjects').where({
-          subject_id: subjectId,
-          subject_type: 'student',
-          model_framework: 'student_v1.0',
-          status: 'active'
-        }).limit(2).get()
-      ])
-      const isResearcher = ['researcher', 'admin'].includes(user.role)
-      if (subjectResult.data.length !== 1 || (!isResearcher && bindingResult.data.length !== 1)) {
+      const authorization = await authorizeStudentOperator({
+        db,
+        openid,
+        subjectId,
+        allowResearcher: true
+      })
+      if (!authorization.authorized) {
         return { success: false, code: 'STUDENT_GUIDANCE_FORBIDDEN', message: '当前微信无权读取该学生的后续采集建议' }
       }
       framework = 'student_v1.0'

@@ -34,6 +34,10 @@ Page({
 
     isTranscribing: false,
 
+    // 原始 Voice / Message 已保存，但 ASR 尚未成功。此状态下必须保留
+    // currentVoiceId 并允许重试，不能让下一次录音覆盖待恢复记录。
+    asrFailed: false,
+
     // 首次访谈：
     // 完成本题
     //
@@ -444,6 +448,9 @@ Page({
               '',
 
             canCompleteTask:
+              false,
+
+            asrFailed:
               false
           })
 
@@ -509,6 +516,9 @@ Page({
             '',
 
           canCompleteTask:
+            false,
+
+          asrFailed:
             false
         })
 
@@ -875,19 +885,40 @@ Page({
       if (
         this.data.sessionType !==
           'initial_interview' &&
-        this.data.currentVoiceId &&
-        this.data.lastTranscript
+        this.data.currentVoiceId
       ) {
 
         wx.showToast({
 
           title:
-            '请先提交当前记录',
+            this.data.asrFailed
+              ? '录音已保存，请先重新识别'
+              : '请先提交当前记录',
 
           icon:
             'none'
         })
 
+
+        return
+      }
+
+
+      // 首次采集可以在同一题继续补充，但一条已经落库、尚未转写成功
+      // 的录音必须先恢复，避免 currentVoiceId 被下一条录音覆盖。
+      if (
+        this.data.sessionType ===
+          'initial_interview' &&
+        this.data.currentVoiceId &&
+        this.data.asrFailed
+      ) {
+
+        wx.showToast({
+          title:
+            '录音已保存，请先重新识别',
+          icon:
+            'none'
+        })
 
         return
       }
@@ -986,7 +1017,15 @@ Page({
 
       this.setData({
         isUploading:
-          true
+          true,
+
+        asrFailed:
+          false,
+
+        // 首次采集补充录音期间也先禁用提交，防止新录音尚未完成保存/
+        // 转写时推进任务。若上传本身失败，catch 会恢复已有转写的提交态。
+        canCompleteTask:
+          false
       })
 
 
@@ -1181,7 +1220,17 @@ Page({
             false,
 
           isTranscribing:
-            false
+            false,
+
+          canCompleteTask:
+            this.data.sessionType ===
+              'initial_interview' &&
+            Boolean(
+              String(
+                this.data.lastTranscript ||
+                ''
+              ).trim()
+            )
         })
 
 
@@ -1219,7 +1268,10 @@ Page({
 
       this.setData({
         isTranscribing:
-          true
+          true,
+
+        asrFailed:
+          false
       })
 
 
@@ -1297,7 +1349,10 @@ Page({
           canCompleteTask:
             this.data.sessionType ===
               'initial_interview' &&
-            hasTranscript
+            hasTranscript,
+
+          asrFailed:
+            false
         })
 
 
@@ -1325,6 +1380,17 @@ Page({
         )
 
 
+        // saveVoiceRecord 已经先于 ASR 完成；识别失败不能清空原始录音。
+        // 保留 currentVoiceId，页面提供“重新识别”，成功后再由用户确认提交。
+        this.setData({
+          asrFailed:
+            Boolean(this.data.currentVoiceId),
+
+          canCompleteTask:
+            false
+        })
+
+
         wx.showToast({
 
           title:
@@ -1346,6 +1412,27 @@ Page({
             false
         })
       }
+    },
+
+
+  // ==================================================
+  // 对已经安全保存的原始录音重新执行 ASR
+  // ==================================================
+
+  retryTranscription:
+    function () {
+
+      if (
+        !this.data.currentVoiceId ||
+        this.data.isTranscribing
+      ) {
+        return
+      }
+
+
+      this.transcribeVoice(
+        this.data.currentVoiceId
+      )
     },
 
 
@@ -1473,6 +1560,9 @@ Page({
               '',
 
             canCompleteTask:
+              false,
+
+            asrFailed:
               false
           })
 
@@ -1582,6 +1672,9 @@ Page({
             0,
 
           canCompleteTask:
+            false,
+
+          asrFailed:
             false
         })
 
@@ -1812,7 +1905,10 @@ Page({
             '',
 
           duration:
-            0
+            0,
+
+          asrFailed:
+            false
         })
 
 

@@ -146,6 +146,16 @@ Page({
       return
     }
 
+    if (this.data.currentVoiceId) {
+      wx.showToast({
+        title: this.data.asrFailed
+          ? '录音已保存，请先重新识别'
+          : '请先提交当前分享',
+        icon: 'none'
+      })
+      return
+    }
+
     recorderManager.start({
       duration: 60000,
       sampleRate: 16000,

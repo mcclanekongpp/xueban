@@ -355,72 +355,13 @@ Page({
 
 
   // ==================================================
-  // 学生采集入口
-  // 不修改教师账号角色，也不覆盖 Teacher Subject
+  // 帮学生采集入口始终可用；Teacher 自身采集进度和模型不是前置条件。
   // ==================================================
 
-  async openStudentCollection() {
-    wx.showLoading({
-      title: '正在进入'
+  openStudentCollection() {
+    wx.navigateTo({
+      url: '/pages/teacher-student-collection/teacher-student-collection'
     })
-
-    try {
-      const res =
-        await wx.cloud.callFunction({
-          name: 'getMySubjectBindings',
-          data: { subject_type: 'student' }
-        })
-
-      const result =
-        res && res.result
-          ? res.result
-          : null
-
-      const bindings =
-        result &&
-        result.success === true &&
-        Array.isArray(result.bindings)
-          ? result.bindings
-          : []
-
-      if (bindings.length > 0) {
-        getApp().globalData.currentStudentBinding =
-          bindings[0]
-
-        wx.navigateTo({
-          url: '/pages/student-home/student-home'
-        })
-
-        return
-      }
-
-      if (result && result.success === true) {
-        wx.navigateTo({
-          url: '/pages/student-bind/student-bind'
-        })
-
-        return
-      }
-
-      wx.showToast({
-        title:
-          (result && result.message) ||
-          '暂时无法进入学生采集',
-        icon: 'none'
-      })
-    } catch (error) {
-      console.error(
-        'openStudentCollection error:',
-        error
-      )
-
-      wx.showToast({
-        title: '暂时无法进入学生采集',
-        icon: 'none'
-      })
-    } finally {
-      wx.hideLoading()
-    }
   }
 
 })

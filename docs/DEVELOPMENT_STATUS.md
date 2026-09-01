@@ -5,16 +5,67 @@
 
 教师首次主体模型 MVP、Student Binding MVP、Student Initial Model MVP 与 Student Continuous Collection V1.0 均已完成端到端验证。
 
-候选版 `1.0.10` 已替代 `1.0.9`。规则驱动自动 revision V1.0 已部署到 `model-dev-d9gkoyaolb464c28d`，并用 TEST Student 完成云端自动激活、旧版保留与重复 refresh 幂等验证。Teacher / Student 首次模型自动构建、无人工审核激活以及 researcher/admin 只读构建总览也已部署；隔离 TEST Teacher / Student 已分别完成云端自动 Analysis、`automatic_initial` 激活、Subject 指针和重复调用幂等验证。微信首次审核因缺少独立声纹授权协议未通过；整改版 `1.0.10` 已于 2026-09-01 22:22:38 CST 上传为开发版，尚未重新提交审核或正式发布。
+候选版 `1.0.11` 已替代 `1.0.10`。规则驱动自动 revision V1.0、首次模型无审核自动激活、独立声纹授权、近 60 秒 ASR 恢复、Teacher / Student 单绑定码和 Guardian + Teacher 联合采集均已部署。`1.0.11` 已于 2026-09-02 01:05 CST 上传为微信开发版本，包含本地录音失败恢复和 Student Progress 并发保护；尚未重新提交审核或正式发布。
 
-当前最高优先级：**在微信公众平台使用整改说明重新提交 `1.0.10` 审核；审核通过后发布**。
+当前最高优先级：**完成微信公众平台隐私保护指引最终核对，提交 `1.0.11` 审核；通过后发布，并按安全并发线启动真人小样本采集**。
+
+## 真人试采候选版 1.0.11 与并发验收（2026-09-02）
+
+- [x] AppID = `wx962acbf120074da9`，云环境 = `model-dev-d9gkoyaolb464c28d`
+- [x] 包含 Teacher / Student 单 Bind Code、Teacher Collector、统一 Student Operator、近 60 秒原音恢复和录音失败重试交互
+- [x] Student initial Progress 初始化改为确定性文档 ID；完成任务只对明确 TransactionConflict 做有限退避重试，保持 completed_task_ids 去重和 17 项上限
+- [x] 隔离 TEST 5 / 10 / 20 / 30 / 50 路 Teacher / Student 混合读取全部成功；50 路为 25 Teacher + 25 Student，失败 0
+- [x] 同一 TEST Student 同一题 10 路并发完成全部成功，9 条幂等返回，最终 completed_count = 1
+- [x] 20 路热点写（5 个 TEST task 各重复 4 次）最终保持 5 个唯一 task、单一 Progress、无溢出；19 成功，1 次达到重试上限，证明高热点下数据安全但不承诺零瞬时失败
+- [x] 真人启动安全线：首次任务同秒提交不超过 8 人；持续多变量 Analysis 同秒不超过 3 人；同一 Student 不安排多端同时回答同一题
+- [x] 官方约束：CloudBase 单函数系统并发上限 1000；腾讯一句话识别 30 QPS；CloudBase 内置 AI 默认环境级并发 10。端到端容量按最小瓶颈而不是 1000 计算
+- [x] 104 个 JavaScript 通过 `node --check`，124 个 JSON 解析通过，`git diff --check` 通过
+- [x] 开发者工具完整刷新后 Teacher Home / Model、Student Home / Model / Continuous 和 Voice Consent 回归通过，Console / Network 错误过滤为空
+- [x] `completeStudentCollectionTask`、`getNextStudentCollectionTask`、`verifyJointStudentCollectionMvp` 已部署并为 Active
+- [x] 上传时间 = 2026-09-02 01:05 CST，代码包 = 848460 bytes
+- [ ] 尚未提交微信审核
+- [ ] 尚未正式发布
+
+版本说明：支持教师家长共同采集，优化近 60 秒语音恢复与并发进度。
+
+## Teacher / Student 单绑定码与联合 Student 采集（2026-09-01）
+
+- [x] `registerTeacherForStudy`、`registerStudentForStudy` 新流程不再接收、生成或保存 teacher_no / student_no 及对应 hash；每个 Subject 只生成一个 16 字符高熵随机 code，数据库只保存 SHA-256
+- [x] `teacher-bind`、`student-bind` 均简化为只输入一个 Bind Code；历史 no hash 字段保留但新逻辑不读取
+- [x] Teacher code 继续用于 Teacher 本人一次绑定；Student code 改为 `status = active / revoked / expired` + `usage_state = unused / guardian_only / teacher_only / guardian_and_teacher`
+- [x] 新建 ADMINONLY 集合 `teacher_student_collection_access`，同一 Teacher Subject + Student Subject 只保留一条 active access，重复输入幂等
+- [x] 新增 `authorizeTeacherStudentCollectionByCode` 与 `getMyTeacherStudentCollectionAccesses`；Teacher 只需已完成本人 Teacher Binding 并与 Student 共享 active Class，不检查 Teacher 13/13、Evidence、Model 或 current snapshot
+- [x] 新增共用 `authorizeStudentOperator`，Student 正式链支持 active Guardian 或 active 同班 Teacher Collector；前端 operator_mode 不作为授权依据
+- [x] `ensureStudentBackground`、任务读取、Session、Voice、Evidence、Analysis、模型、提示、持续采集及 Voice Consent 均改用统一授权；所有数据继续归 Student_ID，并追加 operator_type / operator_teacher_subject_id 追溯字段
+- [x] Student initial progress 改为跨 operator 共用；`completeStudentCollectionTask` 在事务内去重 completed_task_ids，同一任务重复完成幂等且 completed_count 不得超过 17
+- [x] 历史 Student code 已先 dry-run，再仅对 12 条 `is_test = true` 记录完成 status / usage_state 迁移；历史 `student_no_hash` 未删除、未改写
+- [x] TEST 云端验收 10/10 通过：Teacher 单码、无模型可采集、Guardian 单码、两种使用顺序、第二 Guardian 拒绝、同 Teacher 幂等、两名同班 Teacher、跨班拒绝、一个 Teacher 多 Student
+- [x] 统一 operator helper 验证 Guardian / Teacher A / Teacher B 均可访问同一 TEST Student；共享 progress 验证 1 → 2、集合只有一份且 completed_task_ids 去重
+- [x] 新页面 `pages/teacher-student-collection/` 编译与运行通过，Teacher Home 的“帮学生采集”不受教师自身模型状态限制
+- [x] 新增 TEST 验收函数 `verifyJointStudentCollectionMvp`，无正式前端入口且只操作 `TEST_JOINT_BINDING_20260901` 隔离数据
+- [x] 最终云端回归：22 个本轮相关云函数均为 Active；现有教师仍为 13/13 且 current snapshot 仍为 `MS_MT873ZQI_9PEUL`；主 TEST Student 仍为 17/17 且 current snapshot 为 `MS_AUTO_964A2C6C7C1C4C278E187881`
+- [x] 全部云函数/小程序 JavaScript 通过 `node --check`，全部 JSON 可解析；绑定页、Teacher Home、教师帮学生页 WXML/WXSS 编译通过，开发者工具 Console / Network 错误过滤为空
+- [x] Voice Consent 回归：现有 Teacher 与 Guardian 的授权读取正常；隔离 TEST Teacher Collector 没有授权记录时保持未授权，Student 录音入口始终先经 `authorizeStudentOperator` 与 `voice_consents` 双重校验后才可调用麦克风
+
+## 近 60 秒录音边界修复（2026-09-01）
+
+- [x] 根因确认：微信前端分别报告 59.920 秒与 59.960 秒，但编码后媒体时长为 60.048 秒与 60.084 秒，腾讯一句话识别因此拒绝
+- [x] 两条原始 MP3 均已完整存在 CloudBase 云存储，`voice_records`、`messages` 和 Teacher Subject 归属未丢失
+- [x] `transcribeVoice` 保留 URL 快速路径；命中 60 秒边界时不修改原云文件，只对内存副本按完整 MP3 帧去掉尾部编码填充，再调用当前已授权的一句话识别
+- [x] 两条受影响教师录音已恢复为 success 并回写对应 Message；识别副本均为 59.832 秒，原始 `file_id` 未改变
+- [x] Teacher initial / teaching reflection / student observation、Student initial / continuous 全部保留 60 秒录音上限并复用同一云端兼容逻辑
+- [x] Teacher / Student 三个实际录音页面均增加：ASR 失败时保留 currentVoiceId、显示重试、禁止覆盖、转写成功后才启用提交
+- [x] 教师学生观察、Student initial 和 Student continuous 失败/重试状态已通过开发者工具页面级验证；WXML / WXSS 编译和 Console 检查通过
+- [x] `transcribeVoice` 已部署并为 Active（Nodejs16.13，timeout 60 秒）
+- [x] 含本地前端修复的预览包已推送当前开发者微信（838207 bytes），不等于开发版本上传或提交审核
+- [x] 前端重试交互已进入 `1.0.11`
 
 ## 独立声纹授权协议整改（2026-09-01）
 
 - [x] 新增 `pages/voice-consent/voice-consent`，完整展示独立《声纹授权协议》；复选框默认不勾选
 - [x] 新增 `voice_consents` 并设置 ADMINONLY，V1.0 按 `user_id + subject_id + consent_version` 保存 active 授权
 - [x] 新增 `checkVoiceConsent` / `saveVoiceConsent`；两者只接受 subject_id，均由 OPENID 解析当前 user
-- [x] Teacher 必须匹配 active Teacher Subject；Student 必须匹配当前 user 的 active guardian binding
+- [x] Teacher 自身录音必须匹配 active Teacher Subject；Student 录音必须通过 `authorizeStudentOperator`，active Guardian 与合法同班 Teacher Collector 均须按 user + Student_ID 独立授权
 - [x] Teacher initial / continuous、Student initial / continuous 的实际 `recorderManager.start()` 前均已统一 fail-closed 拦截
 - [x] 未勾选不能提交；点击“不同意”返回且不写授权、不调用麦克风
 - [x] 同一 Guardian 的不同 Student_ID 分别查询和保存，不能共用一条授权
@@ -173,7 +224,9 @@
 - [ ] 当前备份密钥仍与加密包位于同一台 Mac；必须再复制一份密钥到独立离线介质，不能只依赖项目目录
 - [ ] 正式恢复演练只能在新的空白验证环境中进行，需另行授权
 
-## Teacher / Student 统一绑定协议（2026-08-28）
+## Teacher / Student 旧双因素绑定协议（2026-08-28，历史记录，已由 2026-09-01 单码机制替代）
+
+> 本节仅保留当时的验收历史，不再描述当前正式流程；其中 subject_no/hash、双重校验和 Student code 一次性 used 语义均已停止使用。
 
 - [x] 完成兼容设计：School / Class 继续作为组织层，Teacher / Student 继续作为独立 Subject；不建立学校或班级微信主体
 - [x] 新增 `registerTeacherForStudy`：受控预登记 Teacher Subject、teacher class_membership，并生成只返回一次明文的随机 bind code；数据库仅保存 bind_code_hash 与 school-scoped teacher_no_hash
@@ -284,7 +337,7 @@
 - [x] Student Home 在首次采集 17/17 后显示“查看首次建模结果”和“再说一说”
 - [x] `student-model` active 实测显示 S1—S6、17 变量；历史 draft 兼容分支的新文案为“首次建模结果（生成中）”
 - [x] 页面不显示分数、排名、人格类型、心理诊断、原始录音或 Evidence Analysis reasoning
-- [x] `createSession` 支持 `student_continuous_record`，并验证当前 user 的 active Guardian binding
+- [x] `createSession` 支持 `student_continuous_record`；当前版本已升级为统一 `authorizeStudentOperator`，验证 active Guardian 或合法同班 Teacher Collector
 - [x] `student-continuous` 复用 `wx.getRecorderManager`、`saveVoiceRecord` 与 `transcribeVoice`
 - [x] 正式页面通过 `analyzeStudentEvidence(action = route_continuous)` 完成 0—5 变量内容路由，再复用同一函数逐条保存 Analysis
 - [x] `matches = []` 时 Voice、Message、continuous_record_id 与 no-match reason 仍保留，不伪造 Evidence
@@ -326,7 +379,7 @@ TEST active snapshot：`MS_MTBMDOF7_0MNQU`，version = 1.0。该快照只用于�
 
 结论：**Student Initial Model MVP 已完整跑通**。
 
-## Student Binding MVP（2026-08-27）
+## Student Binding MVP（2026-08-27，历史验收，已由单码共享机制替代）
 
 - [x] 线下纸质知情同意边界已明确，小程序不保存电子同意
 - [x] 新建 `schools`、`classes`、`class_memberships`
@@ -448,7 +501,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 
 ## 六、当前第一优先级
 
-在微信公众平台完成隐私保护指引最终核对，提交 `1.0.9` 审核；审核通过后发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id。
+在微信公众平台完成隐私保护指引最终核对，提交 `1.0.11` 审核；审核通过后发布。继续坚持 Student_ID 独立于当前操作人的 OpenID / user_id，并按并发安全线从小样本逐步扩容。
 
 ## 七、学生端状态
 
@@ -482,7 +535,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 计划：完成微信平台隐私核对、审核与发布后进入真人教师和学生主体模型采集测试；以真实语音为主，根据实地问题迭代任务文案和交互，不等待 Evidence Profile 或复杂多模态。
 
 ## 八、当前数据库重要集合
-已有：users、identity_map、subjects、schools、classes、class_memberships、teacher_bind_codes、student_bind_codes、guardian_student_bindings、consents、sessions、messages、voice_records、evidence、evidence_analysis、variable_evidence_profiles、model_change_candidates、model_snapshots、collection_tasks、collection_progress、subject_background。
+已有：users、identity_map、subjects、schools、classes、class_memberships、teacher_bind_codes、student_bind_codes、guardian_student_bindings、teacher_student_collection_access、voice_consents、consents、sessions、messages、voice_records、evidence、evidence_analysis、variable_evidence_profiles、model_change_candidates、model_snapshots、collection_tasks、collection_progress、subject_background。
 
 暂停 / 计划：collection_events、supplement_candidates、media_records（后续）、behavior_records（学生侧后续）；Evidence Gap 当前内嵌 Profile，不单独建集合。
 
@@ -493,9 +546,7 @@ Evidence Analysis 失败时，原始记录和 Evidence 必须保留，不得回�
 - `submitTeacherContinuousRecord` 的独立云端运行时仍是 3 秒且无正式前端入口；`1.0.7` 由 `analyzeTeacherEvidence` 的 route_continuous + analyze_batch 承担正式教师持续路由与分析，不阻断真人流程。
 - Teacher Record Center / “我的记录”尚未形成正式业务闭环，已从正式首页移除；后续统一设计，不阻断当前真人试采。
 - `security_follow_up`：正式前端或自动调用链接入前，统一设计 subject authorization。
-- `identity_map` 当前实际只用于 users ↔ Teacher Subject，不适合直接承载 Student_ID ↔ 学号；正式学生身份主表扩展后续统一设计。本轮在线双重校验依赖 `student_bind_codes.student_no_hash` 与线下研究主表。
 - Student Binding MVP 当前限制一个 Student_ID 同时只有一个 active guardian binding；换绑、多监护人和撤销后的重新发码后续开发。
-- student_no 当前使用学校范围标准化后 SHA-256；正式规模化前评估 HMAC / pepper，以降低低熵学号离线枚举风险。
 - 本轮保留少量 `inactive + is_test=true` 权限探针记录，用于证明 ADMINONLY 生效；不参与 active School 查询。
 - Student Evidence Analysis 的个别 TEST 返回使用了字符串 `none` 表示无不确定性；后续生成新快照前统一将这类语义空值标准化为空，不修改已审批的测试快照。
 - `createStudentTestVoiceRecord` 是无正式前端入口、且只允许 active TEST Student 的开发辅助函数；正式页面不得调用。配置辅助函数已限制为 researcher / admin，仍应保持无普通前端入口。

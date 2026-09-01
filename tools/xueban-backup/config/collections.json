@@ -9,6 +9,8 @@
     "teacher_bind_codes",
     "student_bind_codes",
     "guardian_student_bindings",
+    "teacher_student_collection_access",
+    "voice_consents",
     "consents"
   ],
   "research": [
@@ -21,13 +23,13 @@
     "voice_records",
     "evidence",
     "evidence_analysis",
+    "variable_evidence_profiles",
+    "model_change_candidates",
     "model_snapshots"
   ],
   "planned": [
-    "variable_evidence_profiles",
     "collection_events",
     "supplement_candidates",
-    "model_change_candidates",
     "media_records",
     "behavior_records"
   ],

@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 const CONSENT_VERSION = '1.0'
 
 async function getSingle(collectionName, where) {
@@ -42,14 +43,16 @@ async function authorizeSubject(openid, subjectId) {
       return { success: false, code: 'TEACHER_NOT_AUTHORIZED', message: '当前用户没有该教师主体的录音权限' }
     }
   } else if (subject.subject_type === 'student' && subject.model_framework === 'student_v1.0') {
-    const bindingResult = await db.collection('guardian_student_bindings').where({
-      user_id: user.user_id,
-      subject_id: subjectId,
-      status: 'active'
-    }).limit(2).get()
-
-    if (bindingResult.data.length !== 1) {
-      return { success: false, code: 'STUDENT_NOT_AUTHORIZED', message: '当前用户没有该学生主体的录音权限' }
+    const studentAuthorization = await authorizeStudentOperator({ db, openid, subjectId })
+    if (!studentAuthorization.authorized) {
+      return { success: false, code: 'STUDENT_NOT_AUTHORIZED', detail_code: studentAuthorization.code, message: '当前用户没有该学生主体的录音权限' }
+    }
+    return {
+      success: true,
+      user: studentAuthorization.user,
+      subject: studentAuthorization.subject,
+      operator_type: studentAuthorization.operator_type,
+      operator_teacher_subject_id: studentAuthorization.operator_teacher_subject_id || ''
     }
   } else {
     return { success: false, code: 'SUBJECT_FRAMEWORK_INVALID', message: '研究主体类型或框架无效' }
@@ -93,6 +96,7 @@ exports.main = async (event = {}) => {
       has_consent: consentResult.data.length === 1,
       subject_id: subjectId,
       subject_type: authorization.subject.subject_type,
+      operator_type: authorization.operator_type || authorization.subject.subject_type,
       consent_version: CONSENT_VERSION
     }
   } catch (error) {

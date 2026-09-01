@@ -3,6 +3,7 @@
     "pages/role-select/role-select",
     "pages/teacher-bind/teacher-bind",
     "pages/teacher-home/teacher-home",
+    "pages/teacher-student-collection/teacher-student-collection",
     "pages/voice-chat/voice-chat",
     "pages/teacher-background/teacher-background",
     "pages/teacher-model/teacher-model",

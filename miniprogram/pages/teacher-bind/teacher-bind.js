@@ -1,7 +1,6 @@
 Page({
   data: {
     bindCode: '',
-    teacherNo: '',
     submitting: false,
     checkingExisting: true
   },
@@ -39,17 +38,12 @@ Page({
     this.setData({ bindCode: event.detail.value })
   },
 
-  onTeacherNoInput(event) {
-    this.setData({ teacherNo: event.detail.value })
-  },
-
   async submitBinding() {
     if (this.data.submitting || this.data.checkingExisting) return
 
     const bindCode = this.data.bindCode.trim()
-    const teacherNo = this.data.teacherNo.trim()
-    if (!bindCode || !teacherNo) {
-      wx.showToast({ title: '请输入绑定码和教师编号', icon: 'none' })
+    if (!bindCode) {
+      wx.showToast({ title: '请输入教师绑定码', icon: 'none' })
       return
     }
 
@@ -61,8 +55,7 @@ Page({
         name: 'bindSubjectByCode',
         data: {
           subject_type: 'teacher',
-          bind_code: bindCode,
-          subject_no: teacherNo
+          bind_code: bindCode
         }
       })
       const result = res && res.result ? res.result : null

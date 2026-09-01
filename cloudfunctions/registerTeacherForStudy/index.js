@@ -11,20 +11,12 @@ function normalizeText(value) {
   return typeof value === 'string' ? value.normalize('NFKC').trim() : ''
 }
 
-function normalizeTeacherNo(value) {
-  return normalizeText(value).toUpperCase().replace(/\s+/g, '')
-}
-
 function normalizeBindCode(value) {
   return normalizeText(value).toUpperCase().replace(/[\s-]+/g, '')
 }
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex')
-}
-
-function teacherNoHash(schoolId, normalizedTeacherNo) {
-  return sha256(`${schoolId}\n${normalizedTeacherNo}`)
 }
 
 function makeId(prefix) {
@@ -41,15 +33,14 @@ function deterministicDocId(prefix, value) {
 
 function generateBindCode() {
   let raw = ''
-
-  while (raw.length < 10) {
-    for (const byte of crypto.randomBytes(10)) {
+  while (raw.length < 16) {
+    for (const byte of crypto.randomBytes(24)) {
+      if (byte >= 224) continue
       raw += BIND_CODE_ALPHABET[byte % BIND_CODE_ALPHABET.length]
-      if (raw.length === 10) break
+      if (raw.length === 16) break
     }
   }
-
-  return `${raw.slice(0, 5)}-${raw.slice(5)}`
+  return raw.match(/.{1,4}/g).join('-')
 }
 
 async function getCurrentUser(openid) {
@@ -57,21 +48,15 @@ async function getCurrentUser(openid) {
   return result.data.length === 1 ? result.data[0] : null
 }
 
-function isActive(record) {
-  return record && record.status === 'active'
-}
-
 function canRegister(user, input) {
-  if (!isActive(user)) return false
+  if (!user || user.status !== 'active') return false
   if (['researcher', 'admin'].includes(user.role)) return true
-
-  // 只为自动化技术验证保留 TEST 例外；正式教师必须由研究团队登记。
   return Boolean(
     user.role === 'teacher' &&
       input.is_test === true &&
       input.school_id.startsWith('TEST_') &&
       input.class_id.startsWith('TEST_') &&
-      input.normalized_teacher_no.startsWith('TEST')
+      input.research_alias.startsWith('TEST_')
   )
 }
 
@@ -87,77 +72,70 @@ function safeTeacher(subject) {
 
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
-
-  if (!openid) {
-    return { success: false, code: 'NO_OPENID', message: '未获取到微信用户标识' }
-  }
-
   const schoolId = normalizeText(event.school_id)
   const classId = normalizeText(event.class_id)
-  const normalizedTeacherNo = normalizeTeacherNo(event.teacher_no)
   const researchAlias = normalizeText(
     event.research_alias || event.teacher_display_code
   ).slice(0, 40)
   const isTest = event.is_test === true
 
-  if (!schoolId || !classId || !normalizedTeacherNo) {
+  if (!openid) {
+    return { success: false, code: 'NO_OPENID', message: '未获取到微信用户标识' }
+  }
+  if (!schoolId || !classId || !researchAlias) {
     return {
       success: false,
       code: 'INVALID_INPUT',
-      message: 'school_id、class_id 和 teacher_no 均为必填项'
+      message: 'school_id、class_id 和 research_alias 均为必填项'
     }
-  }
-
-  if (normalizedTeacherNo.length > 64) {
-    return { success: false, code: 'INVALID_TEACHER_NO', message: '教师编号格式不正确' }
   }
 
   try {
     const user = await getCurrentUser(openid)
-    const input = {
+    if (!canRegister(user, {
       school_id: schoolId,
       class_id: classId,
-      normalized_teacher_no: normalizedTeacherNo,
+      research_alias: researchAlias,
       is_test: isTest
-    }
-
-    if (!canRegister(user, input)) {
+    })) {
       return { success: false, code: 'REGISTER_FORBIDDEN', message: '当前账号无权登记研究教师' }
     }
 
-    const [schoolResult, classResult] = await Promise.all([
-      db.collection('schools').where({ school_id: schoolId }).limit(2).get(),
-      db.collection('classes').where({ class_id: classId, school_id: schoolId }).limit(2).get()
+    const [schoolResult, classResult, aliasResult] = await Promise.all([
+      db.collection('schools').where({ school_id: schoolId, status: 'active' }).limit(2).get(),
+      db.collection('classes').where({
+        class_id: classId,
+        school_id: schoolId,
+        status: 'active'
+      }).limit(2).get(),
+      db.collection('subjects').where({
+        subject_type: 'teacher',
+        model_framework: TEACHER_FRAMEWORK,
+        research_alias: researchAlias,
+        status: 'active'
+      }).limit(2).get()
     ])
 
-    if (schoolResult.data.length !== 1 || !isActive(schoolResult.data[0])) {
+    if (schoolResult.data.length !== 1) {
       return { success: false, code: 'SCHOOL_NOT_ACTIVE', message: '学校不存在或当前不可用' }
     }
-
-    if (classResult.data.length !== 1 || !isActive(classResult.data[0])) {
-      return {
-        success: false,
-        code: 'CLASS_NOT_ACTIVE',
-        message: '班级不存在、与学校不匹配或当前不可用'
-      }
+    if (classResult.data.length !== 1) {
+      return { success: false, code: 'CLASS_NOT_ACTIVE', message: '班级不存在、与学校不匹配或当前不可用' }
     }
-
-    const hashedTeacherNo = teacherNoHash(schoolId, normalizedTeacherNo)
-    const existingResult = await db.collection('teacher_bind_codes').where({
-      school_id: schoolId,
-      teacher_no_hash: hashedTeacherNo
-    }).limit(2).get()
-
-    if (existingResult.data.length > 0) {
-      const existing = existingResult.data[0]
+    if (aliasResult.data.length > 0) {
+      const existing = aliasResult.data[0]
+      const codeResult = await db.collection('teacher_bind_codes').where({
+        subject_id: existing.subject_id,
+        subject_type: 'teacher'
+      }).limit(2).get()
       return {
         success: false,
-        code: existingResult.data.length > 1
+        code: aliasResult.data.length > 1 || codeResult.data.length > 1
           ? 'DUPLICATE_TEACHER_REGISTRATION'
           : 'TEACHER_ALREADY_REGISTERED',
-        message: '该学校范围内的教师编号已经登记',
-        existing_subject_id: existing.subject_id || '',
-        bind_status: existing.status || ''
+        message: '该教师研究别名已经登记；一个 Teacher Subject 只保留一个绑定码',
+        existing_subject_id: existing.subject_id,
+        bind_status: codeResult.data[0] ? codeResult.data[0].status || '' : ''
       }
     }
 
@@ -166,20 +144,17 @@ exports.main = async (event = {}) => {
     const bindId = makeId('TB')
     const bindCode = generateBindCode()
     const bindCodeHash = sha256(normalizeBindCode(bindCode))
-    const registrationDocId = deterministicDocId(
-      'TEACHER_REG',
-      `${schoolId}\n${hashedTeacherNo}`
-    )
+    const registrationDocId = deterministicDocId('TEACHER_BIND', subjectId)
 
     const bindCollision = await db.collection('teacher_bind_codes')
       .where({ bind_code_hash: bindCodeHash })
       .limit(1)
       .get()
-
     if (bindCollision.data.length > 0) {
       return { success: false, code: 'BIND_CODE_COLLISION', message: '绑定码生成冲突，请重试登记' }
     }
 
+    const now = db.serverDate()
     const subjectData = {
       _id: subjectId,
       subject_id: subjectId,
@@ -189,8 +164,8 @@ exports.main = async (event = {}) => {
       status: 'active',
       research_alias: researchAlias,
       is_test: isTest,
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
+      created_at: now,
+      updated_at: now
     }
     const membershipData = {
       _id: membershipId,
@@ -201,8 +176,8 @@ exports.main = async (event = {}) => {
       membership_role: 'teacher',
       status: 'active',
       is_test: isTest,
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
+      created_at: now,
+      updated_at: now
     }
     const bindData = {
       _id: registrationDocId,
@@ -212,12 +187,11 @@ exports.main = async (event = {}) => {
       subject_type: 'teacher',
       school_id: schoolId,
       class_id: classId,
-      teacher_no_hash: hashedTeacherNo,
       status: 'unused',
       is_test: isTest,
       created_by_user_id: user.user_id,
-      created_at: db.serverDate(),
-      updated_at: db.serverDate(),
+      created_at: now,
+      updated_at: now,
       used_at: null,
       expires_at: null
     }

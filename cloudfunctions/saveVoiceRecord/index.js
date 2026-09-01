@@ -6,6 +6,7 @@ cloud.init({
 })
 
 const db = cloud.database()
+const { authorizeStudentOperator, operatorFields } = require('./student-operator-auth')
 
 // 云函数入口函数
 exports.main = async (event, context) => {
@@ -86,12 +87,11 @@ exports.main = async (event, context) => {
       }
     }
 
-    // 7. 以当前用户拥有的 active session 为授权边界。
-    // createSession 已完成教师 identity 或学生 guardian binding 校验。
+    // 7. Session 只决定数据归属。Student session 可由 Guardian 或已授权
+    // Teacher Collector 共用，因此必须按当前 OPENID 重新执行 Student 授权。
     const sessionResult = await db.collection('sessions')
       .where({
         session_id: sessionId,
-        user_id: user.user_id,
         status: 'active'
       })
       .limit(2)
@@ -124,6 +124,28 @@ exports.main = async (event, context) => {
         message: '当前会话缺少研究主体信息'
       }
     }
+
+    let authorization = null
+    if (subjectType === 'student') {
+      authorization = await authorizeStudentOperator({ db, openid, subjectId })
+      if (!authorization.authorized) {
+        return { success: false, code: authorization.code, message: authorization.message }
+      }
+    } else if (session.user_id !== user.user_id) {
+      return {
+        success: false,
+        code: 'TEACHER_SESSION_NOT_AUTHORIZED',
+        message: '当前教师无权使用该会话'
+      }
+    }
+
+    const operator = authorization
+      ? operatorFields(authorization)
+      : {
+          operator_user_id: user.user_id,
+          operator_type: 'teacher',
+          operator_teacher_subject_id: subjectId
+        }
 
     // TEST 标记由研究主体继承，不能依赖前端传入。
     // 这样真机录音与自动化技术记录都能保持同一套测试数据隔离语义。
@@ -161,7 +183,7 @@ exports.main = async (event, context) => {
       subject_id: subjectId,
       subject_type: subjectType,
       framework: framework,
-      operator_user_id: user.user_id,
+      ...operator,
 
       speaker: subjectType,
 
@@ -194,7 +216,7 @@ exports.main = async (event, context) => {
       voice_id: voiceId,
 
       user_id: user.user_id,
-      operator_user_id: user.user_id,
+      ...operator,
       subject_id: subjectId,
       subject_type: subjectType,
       framework: framework,
@@ -252,6 +274,8 @@ exports.main = async (event, context) => {
         voice_id: voiceId,
         user_id: user.user_id,
         operator_user_id: user.user_id,
+        operator_type: operator.operator_type,
+        operator_teacher_subject_id: operator.operator_teacher_subject_id,
         subject_id: subjectId,
         subject_type: subjectType,
         framework: framework,

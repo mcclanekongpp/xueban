@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
 function makeId(prefix) {
   return `${prefix}_${Date.now().toString(36).toUpperCase()}_${Math.random()
@@ -34,7 +35,6 @@ exports.main = async (event = {}) => {
     const user = userResult.data[0]
     const sessionResult = await db.collection('sessions').where({
       session_id: sessionId,
-      user_id: user.user_id,
       subject_type: 'student',
       framework: 'student_v1.0',
       session_type: 'initial_interview',
@@ -50,17 +50,17 @@ exports.main = async (event = {}) => {
     }
 
     const session = sessionResult.data[0]
-    const bindingResult = await db.collection('guardian_student_bindings').where({
-      user_id: user.user_id,
-      subject_id: session.subject_id,
-      status: 'active'
-    }).limit(2).get()
+    const authorization = await authorizeStudentOperator({
+      db,
+      openid,
+      subjectId: session.subject_id
+    })
 
-    if (bindingResult.data.length !== 1) {
+    if (!authorization.authorized) {
       return {
         success: false,
-        code: 'STUDENT_BINDING_NOT_ACTIVE',
-        message: '当前微信没有该学生的有效采集绑定'
+        code: authorization.code,
+        message: authorization.message
       }
     }
 
@@ -161,7 +161,10 @@ exports.main = async (event = {}) => {
         message_id: message.message_id,
         voice_id: voice.voice_id,
         file_id: voice.file_id || '',
-        operator_user_id: user.user_id,
+        operator_user_id: message.operator_user_id || authorization.operator_user_id,
+        operator_type: message.operator_type || authorization.operator_type,
+        operator_teacher_subject_id:
+          message.operator_teacher_subject_id || authorization.operator_teacher_subject_id || '',
         raw_text: String(message.content).trim(),
         transcript: String(message.content).trim(),
         duration_ms: typeof voice.duration_ms === 'number' ? voice.duration_ms : null,

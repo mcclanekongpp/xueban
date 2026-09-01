@@ -5,6 +5,7 @@ const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 const aiApp = tcb.init({ env: 'model-dev-d9gkoyaolb464c28d', timeout: 120000 })
 
 const DIMENSIONS = [
@@ -276,48 +277,24 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const userResult = await db.collection('users').where({ openid }).limit(2).get()
-    const user = userResult.data.length === 1 ? userResult.data[0] : null
-
-    if (!user) {
-      return { success: false, code: 'USER_NOT_FOUND', message: '当前用户不存在' }
-    }
-
-    const [bindingResult, subjectResult] = await Promise.all([
-      db.collection('guardian_student_bindings').where({
-        user_id: user.user_id,
-        subject_id: subjectId,
-        status: 'active'
-      }).limit(2).get(),
-      db.collection('subjects').where({
-        subject_id: subjectId,
-        subject_type: 'student',
-        model_framework: 'student_v1.0',
-        status: 'active'
-      }).limit(2).get()
-    ])
-
-    if (subjectResult.data.length !== 1) {
-      return {
-        success: false,
-        code: 'STUDENT_SUBJECT_NOT_ACTIVE',
-        message: '学生研究主体不存在或已失效'
-      }
-    }
-
-    const subject = subjectResult.data[0]
-    const expectedIdentity = initialSnapshotIdentity(subjectId)
-    const controlled =
-      ['researcher', 'admin'].includes(user.role) ||
-      bindingResult.data.length === 1
-
-    if (!controlled) {
+    const authorization = await authorizeStudentOperator({
+      db,
+      openid,
+      subjectId,
+      allowResearcher: true
+    })
+    if (!authorization.authorized) {
       return {
         success: false,
         code: 'BUILD_STUDENT_MODEL_FORBIDDEN',
+        detail_code: authorization.code,
         message: '当前微信无权为该学生自动构建 Student-M0'
       }
     }
+
+    const user = authorization.user
+    const subject = authorization.subject
+    const expectedIdentity = initialSnapshotIdentity(subjectId)
 
     const [progressResult, backgroundResult, activeResult, draftResult, recoveringResult] = await Promise.all([
       db.collection('collection_progress').where({
@@ -593,6 +570,9 @@ exports.main = async (event = {}) => {
       // 才成为 active。并发或中断重试会复用确定性 snapshot_id。
       status: 'activating',
       is_test: subject.is_test === true,
+      operator_user_id: authorization.operator_user_id,
+      operator_type: authorization.operator_type,
+      operator_teacher_subject_id: authorization.operator_teacher_subject_id || '',
       created_at: now,
       updated_at: now
     }

@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
 exports.main = async (event = {}) => {
   const openid = cloud.getWXContext().OPENID
@@ -18,28 +19,13 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const userResult = await db
-      .collection('users')
-      .where({ openid, status: 'active' })
-      .limit(2)
-      .get()
+    const authorization = await authorizeStudentOperator({ db, openid, subjectId })
 
-    if (userResult.data.length !== 1) {
-      return { success: false, code: 'USER_NOT_ACTIVE', message: '当前用户不可用' }
-    }
-
-    const user = userResult.data[0]
-    const bindingResult = await db
-      .collection('guardian_student_bindings')
-      .where({ user_id: user.user_id, subject_id: subjectId, status: 'active' })
-      .limit(2)
-      .get()
-
-    if (bindingResult.data.length !== 1) {
+    if (!authorization.authorized) {
       return {
         success: false,
-        code: 'STUDENT_BINDING_NOT_ACTIVE',
-        message: '当前微信没有该学生的有效采集绑定'
+        code: authorization.code,
+        message: authorization.message
       }
     }
 

@@ -19,6 +19,7 @@ const {
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 const aiApp = tcb.init({
   env: 'model-dev-d9gkoyaolb464c28d',
   timeout: 120000
@@ -79,6 +80,8 @@ async function authorizeSubject(openid, event, controlled = false) {
   const framework = subjectType === 'student' ? 'student_v1.0' : 'teacher_v1.0'
   let subjectId = text(event.subject_id)
   let operatorAuthorized = false
+  let operatorType = subjectType === 'teacher' ? 'teacher' : ''
+  let operatorTeacherSubjectId = subjectType === 'teacher' ? subjectId : ''
 
   if (subjectType === 'teacher') {
     const isResearcher = ['researcher', 'admin'].includes(user.role)
@@ -100,6 +103,7 @@ async function authorizeSubject(openid, event, controlled = false) {
       }
       subjectId = subjectId || mappedSubjectId
       operatorAuthorized = mappedSubjectId === subjectId
+      operatorTeacherSubjectId = subjectId
     }
   }
 
@@ -123,17 +127,20 @@ async function authorizeSubject(openid, event, controlled = false) {
   const subject = subjectResult.data[0]
 
   if (subjectType === 'student') {
-    const bindingResult = await db.collection('guardian_student_bindings').where({
-      user_id: user.user_id,
-      subject_id: subjectId,
-      status: 'active'
-    }).limit(2).get()
-    if (bindingResult.data.length > 1) {
-      const error = new Error('学生采集绑定存在重复')
-      error.code = 'DUPLICATE_STUDENT_BINDINGS'
+    const authorization = await authorizeStudentOperator({
+      db,
+      openid,
+      subjectId,
+      allowResearcher: true
+    })
+    if (!authorization.authorized) {
+      const error = new Error(authorization.message)
+      error.code = authorization.code
       throw error
     }
-    operatorAuthorized = bindingResult.data.length === 1
+    operatorAuthorized = true
+    operatorType = authorization.operator_type
+    operatorTeacherSubjectId = authorization.operator_teacher_subject_id || ''
   }
 
   const researchControlled = ['researcher', 'admin'].includes(user.role) ||
@@ -157,6 +164,8 @@ async function authorizeSubject(openid, event, controlled = false) {
     subject_id: subjectId,
     subject_type: subjectType,
     framework,
+    operator_type: operatorType,
+    operator_teacher_subject_id: operatorTeacherSubjectId,
     research_controlled: researchControlled
   }
 }
@@ -722,7 +731,10 @@ async function buildDraftAction(auth, dryRun, options = {}) {
     activation_mode: automatic ? 'automatic_rule' : 'controlled_review',
     auto_update_rule_version: automatic ? AUTO_UPDATE_RULE_VERSION : '',
     auto_update_key: automatic ? automaticKey : '',
-    triggered_by_user_id: automatic ? auth.user.user_id : ''
+    triggered_by_user_id: automatic ? auth.user.user_id : '',
+    operator_user_id: auth.user.user_id,
+    operator_type: auth.operator_type || auth.subject_type,
+    operator_teacher_subject_id: auth.operator_teacher_subject_id || ''
   }
 
   if (dryRun) {

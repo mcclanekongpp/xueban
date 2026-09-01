@@ -1,0 +1,33 @@
+<view class="page">
+  <view class="header">
+    <view class="title">帮学生采集</view>
+    <view class="subtitle">输入同班学生的绑定码，继续帮助该学生完成同一份采集。</view>
+  </view>
+
+  <view class="bind-card">
+    <view class="field-label">Student Bind Code</view>
+    <input class="bind-input" value="{{bindCode}}" placeholder="请输入学生绑定码" maxlength="32" bindinput="onBindCodeInput" />
+    <button class="primary-button" type="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="authorizeStudent">确认学生</button>
+    <view class="bind-note">只允许关联与当前教师共享有效班级的学生；教师自己的首次采集和模型不是前置条件。</view>
+  </view>
+
+  <view class="section-title">已关联学生</view>
+  <view wx:if="{{loading}}" class="state-card">正在读取</view>
+  <view wx:elif="{{accesses.length === 0}}" class="state-card">尚未关联学生</view>
+
+  <view wx:for="{{accesses}}" wx:key="access_id" class="student-card">
+    <view class="student-heading">
+      <view>
+        <view class="student-name">{{item.student.research_alias || '学生研究主体'}}</view>
+        <view class="student-code">{{item.student.subject_id}}</view>
+      </view>
+      <view class="progress-badge">{{item.progress.completed_tasks}} / 17</view>
+    </view>
+    <view class="organization">{{item.organization.school_name || item.organization.school_id}} · {{item.organization.class_name || item.organization.class_id}}</view>
+    <view class="actions">
+      <button class="action primary" data-subject-id="{{item.student.subject_id}}" bindtap="openCollection">{{item.progress.status === 'completed' ? '查看首次采集' : (item.progress.completed_tasks > 0 ? '继续首次采集' : '开始首次采集')}}</button>
+      <button class="action" data-subject-id="{{item.student.subject_id}}" bindtap="openModel">查看学生模型</button>
+      <button class="action" data-subject-id="{{item.student.subject_id}}" bindtap="openContinuous">再说一说</button>
+    </view>
+  </view>
+</view>

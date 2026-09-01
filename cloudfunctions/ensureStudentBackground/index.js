@@ -3,52 +3,13 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const { authorizeStudentOperator } = require('./student-operator-auth')
 
 function makeId(prefix) {
   return `${prefix}_${Date.now().toString(36).toUpperCase()}_${Math.random()
     .toString(36)
     .slice(2, 7)
     .toUpperCase()}`
-}
-
-async function resolveBoundStudent(openid, subjectId) {
-  const userResult = await db
-    .collection('users')
-    .where({ openid, status: 'active' })
-    .limit(2)
-    .get()
-
-  if (userResult.data.length !== 1) {
-    return { error: 'USER_NOT_ACTIVE' }
-  }
-
-  const user = userResult.data[0]
-  const bindingResult = await db
-    .collection('guardian_student_bindings')
-    .where({ user_id: user.user_id, subject_id: subjectId, status: 'active' })
-    .limit(2)
-    .get()
-
-  if (bindingResult.data.length !== 1) {
-    return { error: 'STUDENT_BINDING_NOT_ACTIVE' }
-  }
-
-  const subjectResult = await db
-    .collection('subjects')
-    .where({
-      subject_id: subjectId,
-      subject_type: 'student',
-      model_framework: 'student_v1.0',
-      status: 'active'
-    })
-    .limit(2)
-    .get()
-
-  if (subjectResult.data.length !== 1) {
-    return { error: 'STUDENT_SUBJECT_NOT_ACTIVE' }
-  }
-
-  return { user, subject: subjectResult.data[0] }
 }
 
 exports.main = async (event = {}) => {
@@ -65,12 +26,12 @@ exports.main = async (event = {}) => {
   }
 
   try {
-    const resolved = await resolveBoundStudent(openid, subjectId)
+    const resolved = await authorizeStudentOperator({ db, openid, subjectId })
 
-    if (resolved.error) {
+    if (!resolved.authorized) {
       return {
         success: false,
-        code: resolved.error,
+        code: resolved.code,
         message: '当前微信无权初始化该学生背景'
       }
     }
@@ -156,6 +117,9 @@ exports.main = async (event = {}) => {
       collection_method: 'automatic_derivation',
       status: 'active',
       is_test: resolved.subject.is_test === true,
+      operator_user_id: resolved.operator_user_id,
+      operator_type: resolved.operator_type,
+      operator_teacher_subject_id: resolved.operator_teacher_subject_id || '',
       created_at: now,
       updated_at: now
     }
