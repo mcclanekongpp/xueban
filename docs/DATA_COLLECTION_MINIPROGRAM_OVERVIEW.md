@@ -1,14 +1,14 @@
 # 数据采集小程序整体说明与模拟课堂路线对照
 
-> 文档版本：V1.4
+> 文档版本：V1.5
 >
-> 核对日期：2026-08-31
+> 核对日期：2026-09-01
 >
 > 核对依据：当前本地代码、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_STATUS.md`、`docs/DATA_MODEL.md`
 >
 > 当前候选版本：微信小程序开发版 `1.0.9`（已于 2026-08-31 19:07:57 CST 上传，代码包 828743 bytes；尚未提交审核或正式发布）
 >
-> 当前前沿状态：Teacher / Student 首次模型已改为无人工审核的自动构建/激活，并新增 researcher/admin 只读主体构建总览；相关云函数已部署，隔离 TEST Teacher / Student 已完成云端自动分析、激活、缺口保留和幂等验证；该批改动已进入 `1.0.9`。
+> 当前前沿状态：Teacher / Student 首次模型已改为无人工审核的自动构建/激活，并新增 researcher/admin 只读主体构建总览；相关云函数已部署，隔离 TEST Teacher / Student 已完成云端自动分析、激活、缺口保留和幂等验证；该批改动已进入 `1.0.9`。发布审核专用 TEST Teacher / Student 一次性绑定记录已于 2026-09-01 再次只读核验为 `unused`，明文凭据仅保存在不进入小程序代码包的受控清单中。
 
 ## 1. 文档目的
 
@@ -184,6 +184,12 @@ registerStudentForStudy
 - 同一 Subject 不允许同时被不同微信重复绑定；
 - 存在重复绑定记录时返回异常，不随机选择一条；
 - 普通前端不直接读取绑定集合或任何 hash 字段。
+
+### 5.4 发布与审核测试凭据
+
+项目保留一组独立 TEST Teacher 和一组独立 TEST Student，用于全新微信账号绑定烟雾测试和微信平台审核。两组主体均位于 TEST School / Class，使用虚拟线下编号，`is_test = true`，不包含真实学校、教师、学生或学号信息。
+
+2026-09-01 已通过只读云数据库查询确认，两条专用绑定记录均为 `unused`、`used_at = null`。绑定码成功使用一次后即转为 `used`，不得重置后交给另一账号复用。明文绑定码和虚拟编号只保存在 `docs/REVIEW_TEST.md` 受控清单中，不硬编码到小程序、云函数或本总览；正式发布前如已被测试账号使用，应受控预登记新的 TEST Subject / code，而不是复用旧码。
 
 ## 6. 正式页面与信息架构
 
@@ -651,7 +657,7 @@ Student 返回的是安全摘要，不含原始 Evidence、内部 reasoning、�
 | 分析 | `evidence_analysis` | 单条 Evidence 的正式分析 |
 | 证据健康 | `variable_evidence_profiles` | 变量级 Profile、内嵌 Gap、矛盾与停滞状态 |
 | 模型候选 | `model_change_candidates` | active snapshot 之后的新证据变化候选 |
-| 模型 | `model_snapshots` | draft / active / 历史主体模型版本 |
+| 模型 | `model_snapshots` | activating / active / superseded 及历史 draft 兼容模型版本 |
 | 边界保留 | `consents` | 集合保留，当前纸质知情同意流程不使用 |
 
 最近一次加密备份生成时盘点了当时存在的 19 个业务集合；随后新增 `variable_evidence_profiles` 与 `model_change_candidates`，当前数据面为 21 个业务集合。备份工具会通过实际集合自动枚举纳入这两个集合；下一次执行时还应同步把备份注册表中的分类从 `planned` 调整为 `research`，并在一致性报告中明确列出。
@@ -888,6 +894,7 @@ Model Snapshot
 | 模型构建进度/雷达图 | 已完成，只读运行时计算 |
 | 后续补充对话提醒 | 已完成，只读运行时计算 |
 | researcher/admin 主体构建总览 | 已部署；普通 Teacher 跨主体请求已实测被拒绝 |
+| 发布/审核 TEST 绑定凭据 | 独立 TEST Teacher / Student 各一组；2026-09-01 只读核验均为 `unused` |
 | 微信开发版本 | `1.0.9` 已上传，代码包 828743 bytes |
 | 微信审核 | 尚未提交 |
 | 正式发布 | 尚未发布 |
@@ -1004,7 +1011,6 @@ Evidence
 ### 已有代码但属于受控或遗留能力
 
 - Teacher / Student 研究主体预登记；
-- Teacher / Student 初始模型自动构建/激活（已部署并完成云端 TEST 验证）；
 - researcher/admin 只读主体构建总览（已部署，普通用户越权拒绝已验证）；
 - pending Teacher Evidence 批量分析辅助；
 - 历史 Student Binding 接口；
@@ -1034,8 +1040,7 @@ Evidence
 1. 在微信公众平台核对隐私保护指引，提交 `1.0.9` 审核；
 2. 审核通过后发布小程序；
 3. 组织真人教师、家长和学生试采；
-4. 组织真人教师、家长和学生试采；
-5. 根据真实语音、ASR、交互负担和自动更新质量修复阻断问题。
+4. 根据真实语音、ASR、交互负担和自动更新质量修复阻断问题。
 
 ## 22. 关键代码位置
 
@@ -1067,4 +1072,4 @@ Evidence
 
 ## 23. 一句话总结
 
-当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 首次模型固定结构/证据校验 → 自动 active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 统一门槛 → 自动 revision snapshot → 自动 active”的 Teacher / Student 主体表征基础链。首次无审核自动激活与研究者总览已本地完成，待云端 TEST 验证；自动 revision 已用 TEST Student 完成云端激活和幂等验证。任何自动路径都不会让单条或低质量证据直接改模型；缺失/不足变量保留为构建缺口和后续补充提示。系统已具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。
+当前数据采集小程序已经跑通“线下预登记与主体绑定 → 真人语音采集 → 原始记录保存 → 变量 Evidence → Evidence Analysis → 首次模型固定结构/证据校验 → 自动 active Model Snapshot → 持续 Evidence Health → Model Change Candidate → 统一门槛 → 自动 revision snapshot → 自动 active”的 Teacher / Student 主体表征基础链。首次无审核自动激活、研究者总览和规则驱动自动 revision 均已部署；隔离 TEST Teacher / Student 已完成首次自动激活验证，TEST Student 已完成持续 revision 云端激活和幂等验证。任何自动路径都不会让单条或低质量证据直接改模型；缺失/不足变量保留为构建缺口和后续补充提示。系统已具备模拟课堂所需的主体证据、证据健康和可版本化模型输入基础；主体复现、双主体互动、完整课堂仿真和实验验证仍属于后续阶段。
